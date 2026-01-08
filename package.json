@@ -1,5 +1,5 @@
 {
-  "name": "datamatrix-svg",
+  "name": "datamatrix-svg-ts",
   "version": "1.0.0",
   "description": "DataMatrix SVG generator - TypeScript implementation based on https://github.com/datalog/datamatrix-svg",
   "main": "dist/index.js",
@@ -8,8 +8,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "example": "node dist/example.js"
+    "test:watch": "vitest"
   },
   "keywords": [
     "datamatrix",

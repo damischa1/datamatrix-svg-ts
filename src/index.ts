@@ -1,5 +1,5 @@
 /**
- * DataMatrix SVG Generator
+ * datamatrix-svg-ts
  * 
  * TypeScript implementation based on:
  * https://github.com/datalog/datamatrix-svg

@@ -1,4 +1,4 @@
-# DataMatrix SVG Generator
+# datamatrix-svg-ts
 
 A TypeScript implementation of DataMatrix ECC 200 2D barcode generator that outputs SVG.
 
@@ -13,13 +13,13 @@ Additionally, this version supports all SVG-compatible color values (`currentCol
 ## Installation
 
 ```bash
-npm install datamatrix-svg
+npm install datamatrix-svg-ts
 ```
 
 ## Quick Start
 
 ```typescript
-import { DATAMatrix } from 'datamatrix-svg';
+import { DATAMatrix } from 'datamatrix-svg-ts';
 
 // Simple usage - just pass a string
 const svg = DATAMatrix('Hello World!');
@@ -30,7 +30,7 @@ document.body.appendChild(svg);
 
 ```tsx
 import { useEffect, useRef } from 'react';
-import { DATAMatrix } from 'datamatrix-svg';
+import { DATAMatrix } from 'datamatrix-svg-ts';
 
 // Simple component
 function DataMatrixCode({ message }: { message: string }) {
@@ -81,7 +81,7 @@ function DataMatrixWithColors({ message }: { message: string }) {
 For more control, you can separate encoding from rendering:
 
 ```typescript
-import { encodeToMatrix, matrixToSvg } from 'datamatrix-svg';
+import { encodeToMatrix, matrixToSvg } from 'datamatrix-svg-ts';
 
 // Step 1: Encode message to matrix
 const matrixResult = encodeToMatrix('Hello World!');
