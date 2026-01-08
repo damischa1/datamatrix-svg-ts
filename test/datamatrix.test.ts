@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { createRequire } from 'module';
 import DATAMatrixTS from '../src/datamatrix-svg';
 
 // Setup global document for both JS and TS versions
@@ -9,7 +10,9 @@ const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
 (global as any).document = dom.window.document;
 
 // Import the original JS version (kept as reference for comparison)
-const DATAMatrixJS = require('./datamatrix.js');
+// Using createRequire for CommonJS module in ESM context
+const require = createRequire(import.meta.url);
+const DATAMatrixJS = require('./datamatrix.cjs');
 
 describe('DataMatrix SVG Generation', () => {
   const testCases = [

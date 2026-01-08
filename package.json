@@ -1,33 +1,59 @@
 {
   "name": "datamatrix-svg-ts",
   "version": "1.0.0",
-  "description": "DataMatrix SVG generator - TypeScript implementation based on https://github.com/datalog/datamatrix-svg",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "description": "DataMatrix ECC 200 barcode generator as SVG - TypeScript implementation",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "keywords": [
     "datamatrix",
+    "data-matrix",
     "barcode",
-    "svg",
     "2d-barcode",
-    "typescript"
+    "svg",
+    "ecc200",
+    "typescript",
+    "esm"
   ],
   "author": "",
   "license": "MIT",
-  "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "Based on https://github.com/datalog/datamatrix-svg"
+    "url": "git+https://github.com/yourusername/datamatrix-svg-ts.git"
   },
+  "bugs": {
+    "url": "https://github.com/yourusername/datamatrix-svg-ts/issues"
+  },
+  "homepage": "https://github.com/yourusername/datamatrix-svg-ts#readme",
   "devDependencies": {
     "@types/jsdom": "^27.0.0",
     "@types/node": "^25.0.3",
     "jsdom": "^27.4.0",
+    "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   }

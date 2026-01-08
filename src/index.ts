@@ -14,7 +14,8 @@ export {
   type DataMatrixResult,
   type SvgOptions,
   type Palette,
-  type SvgColor
+  type SvgColor,
+  type NamedColor
 } from './datamatrix-svg';
 
 export { DATAMatrix as default } from './datamatrix-svg';
