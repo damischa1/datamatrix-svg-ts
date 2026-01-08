@@ -149,7 +149,7 @@ describe('DataMatrix SVG Generation', () => {
       message: 'Test message',
       dimension: 200,
       padding: 4,
-      palette: { foreground: '#000000', background: '#ffffff' },
+      palette: { foreground: '#000000' as const, background: '#ffffff' as const },
     };
 
     const svgJS = DATAMatrixJS(jsOptions);

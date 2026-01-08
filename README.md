@@ -1,73 +1,131 @@
 # DataMatrix SVG Generator
 
-TypeScript implementation of a DataMatrix 2D barcode generator.
+A TypeScript implementation of DataMatrix ECC 200 2D barcode generator that outputs SVG.
 
-## Credits
+## Background
 
-This project is based on the excellent JavaScript implementation by Constantine:
-- **Original repository:** https://github.com/datalog/datamatrix-svg
-- **Original license:** MIT License
-- **Original author:** Copyright (c) 2020 Constantine
+This project is a TypeScript rewrite of the excellent [datamatrix-svg](https://github.com/datalog/datamatrix-svg) library by Constantine (MIT License).
+
+The original JavaScript implementation is compact and efficient, but we wanted a version that is native TypeScript with clear, documented code and full type safety. The code is refactored with descriptive names and comments explaining the DataMatrix encoding algorithms, making it easier to understand and maintain.
+
+Additionally, this version supports all SVG-compatible color values (`currentColor`, `rgb()`, `hsl()`, named colors, etc.) instead of just hex colors.
 
 ## Installation
 
 ```bash
-npm install
+npm install datamatrix-svg
 ```
 
-## Build
-
-```bash
-npm run build
-```
-
-## Usage
+## Quick Start
 
 ```typescript
-import { generateDataMatrixSVG, generateDataMatrix } from 'datamatrix-svg';
+import { DATAMatrix } from 'datamatrix-svg';
 
 // Simple usage - just pass a string
-const svg = generateDataMatrixSVG('Hello World!');
+const svg = DATAMatrix('Hello World!');
+document.body.appendChild(svg);
+```
 
-// With options
-const svg2 = generateDataMatrixSVG({
-  msg: 'Your message here',
-  dim: 256,        // Output dimension (default: 256)
-  pad: 2,          // Padding (default: 2)
-  pal: ['#000', '#fff'],  // [foreground, background]
-  rct: false,      // Use rectangular format
-  vrb: false       // Verbose SVG (not optimized)
+## Usage in React
+
+```tsx
+import { useEffect, useRef } from 'react';
+import { DATAMatrix } from 'datamatrix-svg';
+
+// Simple component
+function DataMatrixCode({ message }: { message: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.innerHTML = '';
+      const svg = DATAMatrix(message);
+      containerRef.current.appendChild(svg);
+    }
+  }, [message]);
+
+  return <div ref={containerRef} />;
+}
+      containerRef.current.appendChild(svg);
+    }
+  }, [message]);
+
+  return <div ref={containerRef} />;
+}
+
+// With custom colors
+function DataMatrixWithColors({ message }: { message: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.innerHTML = '';
+      const svg = DATAMatrix({
+        message,
+        dimension: 200,
+        palette: { 
+          foreground: 'currentColor',  // Inherits CSS color
+          background: '#f0f0f0' as const
+        }
+      });
+      containerRef.current.appendChild(svg);
+    }
+  }, [message]);
+
+  return <div ref={containerRef} style={{ color: 'navy' }} />;
+}
+```
+
+## Two-Step API
+
+For more control, you can separate encoding from rendering:
+
+```typescript
+import { encodeToMatrix, matrixToSvg } from 'datamatrix-svg';
+
+// Step 1: Encode message to matrix
+const matrixResult = encodeToMatrix('Hello World!');
+
+// Step 2: Render matrix to SVG
+const svg = matrixToSvg(matrixResult, {
+  dimension: 512,
+  palette: { foreground: '#000', background: '#fff' }
 });
 
-// Get raw matrix data
-const result = generateDataMatrix('Test');
-console.log(result.matrix);  // 2D array of 0s and 1s
-console.log(result.path);    // SVG path data
-console.log(result.width);   // Matrix width
-console.log(result.height);  // Matrix height
+// Or use the matrix data for custom rendering (Canvas, PNG, etc.)
+// matrixResult.matrix[y][x] === 1 means black module
 ```
 
 ## API
 
-### `generateDataMatrixSVG(options: DataMatrixOptions | string): string`
+### `DATAMatrix(options | string): SVGSVGElement`
 
-Generates a complete SVG string for a DataMatrix barcode.
+Main function - generates a DataMatrix barcode as an SVG element.
 
-### `generateDataMatrix(options: DataMatrixOptions | string): DataMatrixResult`
+### `encodeToMatrix(message, rectangular?): DataMatrixResult`
 
-Generates the raw matrix data and SVG path.
+Encodes a message into a pixel matrix (for custom rendering).
+
+### `matrixToSvg(matrixResult, options?): SVGSVGElement`
+
+Converts a matrix to an SVG element.
 
 ### Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `msg` | string | `''` | The message to encode |
-| `dim` | number | `256` | Output dimension in pixels |
-| `pad` | number | `2` | Padding around the barcode |
-| `pal` | `[string, string?]` | `['#000']` | Color palette [foreground, background] |
-| `rct` | boolean | `false` | Use rectangular format |
-| `vrb` | boolean | `false` | Generate verbose (non-optimized) SVG |
+| `message` | `string` | `''` | The message to encode |
+| `dimension` | `number` | `256` | Output size in pixels |
+| `padding` | `number` | `2` | Padding in modules |
+| `palette` | `Palette` | `{ foreground: '#000' }` | Colors |
+| `rectangular` | `boolean` | `false` | Rectangular format |
+
+### Palette Colors
+
+Supports all SVG color values: `#hex`, `rgb()`, `hsl()`, named colors, `currentColor`, `url(#gradient)`, etc.
 
 ## License
 
-MIT License - Same as the original project.
+MIT License
+
+Based on [datamatrix-svg](https://github.com/datalog/datamatrix-svg) by Constantine.

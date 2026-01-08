@@ -16,12 +16,35 @@
 // Types
 // ============================================================================
 
+/** CSS named colors (subset of most common) */
+type NamedColor =
+  | 'black' | 'white' | 'red' | 'green' | 'blue' | 'yellow' | 'cyan' | 'magenta'
+  | 'gray' | 'grey' | 'silver' | 'maroon' | 'olive' | 'navy' | 'purple' | 'teal'
+  | 'aqua' | 'fuchsia' | 'lime' | 'orange' | 'pink' | 'brown' | 'transparent'
+  | 'coral' | 'crimson' | 'gold' | 'indigo' | 'ivory' | 'khaki' | 'lavender'
+  | 'plum' | 'salmon' | 'sienna' | 'tan' | 'tomato' | 'turquoise' | 'violet';
+
+/** 
+ * SVG-compatible color value
+ * Supports hex (#RGB, #RRGGBB), rgb(), rgba(), hsl(), hsla(), 
+ * named colors, currentColor, inherit, none, and url() references
+ */
+export type SvgColor =
+  | NamedColor
+  | 'currentColor' | 'inherit' | 'none'
+  | `#${string}`                    // Hex colors
+  | `rgb(${string})`                // RGB
+  | `rgba(${string})`               // RGBA
+  | `hsl(${string})`                // HSL
+  | `hsla(${string})`               // HSLA
+  | `url(${string})`;               // Gradient/pattern references
+
 /** Color palette for DataMatrix rendering */
 export interface Palette {
-  /** Foreground (module) color in hex format (default: '#000') */
-  foreground?: string;
-  /** Background color in hex format (default: transparent) */
-  background?: string;
+  /** Foreground (module) color (default: '#000') */
+  foreground?: SvgColor;
+  /** Background color (default: transparent) */
+  background?: SvgColor;
 }
 
 /** Configuration options for DataMatrix generation */
@@ -167,24 +190,94 @@ const NOMINAL_PATTERN: number[] = [
 // Helper Functions (Private - not exported)
 // ============================================================================
 
+/** CSS named colors supported by SVG */
+const CSS_NAMED_COLORS = new Set([
+  // Basic colors
+  'black', 'white', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+  'gray', 'grey', 'silver', 'maroon', 'olive', 'navy', 'purple', 'teal', 'aqua',
+  'fuchsia', 'lime', 'orange', 'pink', 'brown', 'transparent',
+  // Extended colors (most common)
+  'aliceblue', 'antiquewhite', 'aquamarine', 'azure', 'beige', 'bisque',
+  'blanchedalmond', 'blueviolet', 'burlywood', 'cadetblue', 'chartreuse',
+  'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'darkblue',
+  'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgreen', 'darkgrey', 'darkkhaki',
+  'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred',
+  'darksalmon', 'darkseagreen', 'darkslateblue', 'darkslategray', 'darkslategrey',
+  'darkturquoise', 'darkviolet', 'deeppink', 'deepskyblue', 'dimgray', 'dimgrey',
+  'dodgerblue', 'firebrick', 'floralwhite', 'forestgreen', 'gainsboro',
+  'ghostwhite', 'gold', 'goldenrod', 'greenyellow', 'honeydew', 'hotpink',
+  'indianred', 'indigo', 'ivory', 'khaki', 'lavender', 'lavenderblush',
+  'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan',
+  'lightgoldenrodyellow', 'lightgray', 'lightgreen', 'lightgrey', 'lightpink',
+  'lightsalmon', 'lightseagreen', 'lightskyblue', 'lightslategray', 'lightslategrey',
+  'lightsteelblue', 'lightyellow', 'limegreen', 'linen', 'mediumaquamarine',
+  'mediumblue', 'mediumorchid', 'mediumpurple', 'mediumseagreen', 'mediumslateblue',
+  'mediumspringgreen', 'mediumturquoise', 'mediumvioletred', 'midnightblue',
+  'mintcream', 'mistyrose', 'moccasin', 'navajowhite', 'oldlace', 'olivedrab',
+  'orangered', 'orchid', 'palegoldenrod', 'palegreen', 'paleturquoise',
+  'palevioletred', 'papayawhip', 'peachpuff', 'peru', 'plum', 'powderblue',
+  'rosybrown', 'royalblue', 'saddlebrown', 'salmon', 'sandybrown', 'seagreen',
+  'seashell', 'sienna', 'skyblue', 'slateblue', 'slategray', 'slategrey',
+  'snow', 'springgreen', 'steelblue', 'tan', 'thistle', 'tomato', 'turquoise',
+  'violet', 'wheat', 'whitesmoke', 'yellowgreen'
+]);
+
 /**
- * Validates hex color format (#RGB or #RRGGBB)
+ * Validates SVG-compatible color values
+ * Supports: hex (#RGB, #RRGGBB), rgb(), rgba(), hsl(), hsla(), named colors,
+ * currentColor, inherit, none, and url() references
  */
-function isValidHexColor(color: string): boolean {
-  return /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color);
+function isValidSvgColor(color: string): boolean {
+  const trimmed = color.trim().toLowerCase();
+  
+  // Hex colors: #RGB or #RRGGBB
+  if (/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color)) {
+    return true;
+  }
+  
+  // rgb() and rgba()
+  if (/^rgba?\s*\(/.test(trimmed)) {
+    return true;
+  }
+  
+  // hsl() and hsla()
+  if (/^hsla?\s*\(/.test(trimmed)) {
+    return true;
+  }
+  
+  // Special SVG/CSS values
+  if (['currentcolor', 'inherit', 'none', 'transparent'].includes(trimmed)) {
+    return true;
+  }
+  
+  // URL references (gradients, patterns)
+  if (/^url\s*\(/.test(trimmed)) {
+    return true;
+  }
+  
+  // Named colors
+  if (CSS_NAMED_COLORS.has(trimmed)) {
+    return true;
+  }
+  
+  return false;
 }
 
 /**
  * Creates an SVG element with specified attributes
+ * @typeParam T - The specific SVG element type
  */
-function createSvgElement(tagName: string, attributes?: Record<string, string | number>): SVGElement {
+function createSvgElement<T extends SVGElement = SVGElement>(
+  tagName: string, 
+  attributes?: Record<string, string | number>
+): T {
   const element = document.createElementNS(SVG_NAMESPACE, tagName);
 
   for (const attrName in attributes || {}) {
     element.setAttribute(attrName, String(attributes![attrName]));
   }
 
-  return element;
+  return element as T;
 }
 
 // ============================================================================
@@ -251,7 +344,7 @@ function createSvgRoot(
   pixelDimension: number,
   foregroundColor: string
 ): SVGSVGElement {
-  return createSvgElement('svg', {
+  return createSvgElement<SVGSVGElement>('svg', {
     'viewBox': [0, 0, svgWidth, svgHeight].join(' '),
     'width': pixelDimension / svgHeight * svgWidth | 0,
     'height': pixelDimension,
@@ -259,7 +352,7 @@ function createSvgRoot(
     'shape-rendering': 'crispEdges',
     'xmlns': SVG_NAMESPACE,
     'version': '1.1'
-  }) as SVGSVGElement;
+  });
 }
 
 /**
@@ -270,8 +363,8 @@ function createSvgRoot(
  * @param backgroundColor - Background fill color
  * @returns SVG path element for background
  */
-function createBackgroundPath(svgWidth: number, svgHeight: number, backgroundColor: string): SVGElement {
-  return createSvgElement('path', {
+function createBackgroundPath(svgWidth: number, svgHeight: number, backgroundColor: string): SVGPathElement {
+  return createSvgElement<SVGPathElement>('path', {
     'fill': backgroundColor,
     'd': 'M0,0v' + svgHeight + 'h' + svgWidth + 'V0H0Z'
   });
@@ -284,9 +377,9 @@ function createBackgroundPath(svgWidth: number, svgHeight: number, backgroundCol
  * @param padding - Padding offset for transform
  * @returns SVG path element for barcode
  */
-function createBarcodePath(pathData: string, padding: number): SVGElement {
+function createBarcodePath(pathData: string, padding: number): SVGPathElement {
   const transformMatrix = [1, 0, 0, 1, padding, padding];
-  return createSvgElement('path', {
+  return createSvgElement<SVGPathElement>('path', {
     'transform': 'matrix(' + transformMatrix + ')',
     'd': pathData
   });
@@ -295,12 +388,12 @@ function createBarcodePath(pathData: string, padding: number): SVGElement {
 /**
  * Resolves and validates color from palette
  * 
- * @param color - Color string to validate
- * @param defaultColor - Default color if invalid
- * @returns Valid hex color or default
+ * @param color - Color string to validate (hex, rgb, hsl, named, currentColor, etc.)
+ * @param defaultColor - Default color if invalid or undefined
+ * @returns Valid SVG color or default
  */
 function resolveColor(color: string | undefined, defaultColor: string | null): string | null {
-  if (color && isValidHexColor(color)) {
+  if (color && isValidSvgColor(color)) {
     return color;
   }
   return defaultColor;
@@ -412,7 +505,7 @@ function encodeEdifact(text: string): number[] {
   // Handle remaining characters with ASCII encoding
   return alignedLength > textLength
     ? codewords
-    : codewords.concat(encodeAscii(text.substr(alignedLength == 0 ? 0 : alignedLength - 1)));
+    : codewords.concat(encodeAscii(text.substring(alignedLength === 0 ? 0 : alignedLength - 1)));
 }
 
 /**
@@ -486,7 +579,7 @@ function encodeTextMode(text: string, encodingTable: number[]): number[] {
 
   // Encode remaining characters in ASCII
   if (charCount > 0 || i < textLength) {
-    return codewords.concat(encodeAscii(text.substr(i - charCount)));
+    return codewords.concat(encodeAscii(text.substring(i - charCount)));
   }
 
   return codewords;
@@ -864,11 +957,12 @@ function encodeMessage(text: string, useRectangular?: boolean): DataMatrixResult
     matrix[y][x] = 1;
   };
 
-  // Convert to UTF-8 bytes
-  text = unescape(encodeURI(text));
+  // Convert to UTF-8 bytes using TextEncoder
+  const utf8Bytes = new TextEncoder().encode(text);
+  const utf8Text = String.fromCharCode(...utf8Bytes);
 
   // Step 1: Select best encoding mode
-  const encodedData = selectBestEncoding(text);
+  const encodedData = selectBestEncoding(utf8Text);
 
   // Step 2: Calculate symbol size
   const symbolSize = calculateSymbolSize(encodedData.length, useRectangular);
