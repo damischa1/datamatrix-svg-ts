@@ -9,6 +9,53 @@
  */
 
 // ============================================================================
+// Errors
+// ============================================================================
+
+/**
+ * Error codes for DataMatrix validation errors.
+ * These represent expected, recoverable error conditions.
+ */
+export type DataMatrixErrorCode = 'EMPTY_MESSAGE' | 'MESSAGE_TOO_LONG';
+
+/**
+ * Custom error class for DataMatrix validation errors.
+ * 
+ * This error is thrown for expected, recoverable conditions:
+ * - EMPTY_MESSAGE: The input message is empty (and allowEmptyMessage is false)
+ * - MESSAGE_TOO_LONG: The encoded message exceeds DataMatrix capacity (max ~1556 bytes)
+ * 
+ * Other errors (programming bugs) will throw standard Error.
+ * 
+ * @example
+ * ```typescript
+ * try {
+ *   const svg = DATAMatrix(message);
+ * } catch (e) {
+ *   if (e instanceof DataMatrixError) {
+ *     // Handle validation error
+ *     console.log(`Validation failed: ${e.code} - ${e.message}`);
+ *   } else {
+ *     // Unexpected programming error
+ *     throw e;
+ *   }
+ * }
+ * ```
+ */
+export class DataMatrixError extends Error {
+  /** Error code identifying the specific validation failure */
+  readonly code: DataMatrixErrorCode;
+
+  constructor(code: DataMatrixErrorCode, message: string) {
+    super(message);
+    this.name = 'DataMatrixError';
+    this.code = code;
+    // Maintains proper prototype chain for instanceof checks
+    Object.setPrototypeOf(this, DataMatrixError.prototype);
+  }
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -259,7 +306,9 @@ function encodeTextMode(text: string, encodingTable: number[]): number[] {
   let charCount = 0;      // Characters packed (0-2)
   let codewordValue = 0;  // Accumulated value for packing
   const textLength = text.length;
-  const codewords: number[] = [encodingTable[0]]; // Mode switch codeword
+  // encodingTable is a compile-time constant, safe to use !
+  const modeSwitchCodeword = encodingTable[0]!;
+  const codewords: number[] = [modeSwitchCodeword]; // Mode switch codeword
 
   /**
    * Packs a value into the codeword accumulator
@@ -288,10 +337,12 @@ function encodeTextMode(text: string, encodingTable: number[]): number[] {
       charCode -= 128;
     }
 
-    // Find character in encoding table
-    for (tableIndex = 1; charCode > encodingTable[tableIndex]; tableIndex += 3);
+    // Find character in encoding table (compile-time constant)
+    for (tableIndex = 1; encodingTable[tableIndex]! < charCode; tableIndex += 3);
 
-    const shiftValue = encodingTable[tableIndex + 1];
+    // Compile-time constant table, safe to use !
+    const shiftValue = encodingTable[tableIndex + 1]!;
+    const baseValue = encodingTable[tableIndex + 2]!;
 
     // Check if character is valid in this encoding
     if (8 == shiftValue || (9 == shiftValue && 0 == charCount && i == textLength - 1)) {
@@ -305,7 +356,7 @@ function encodeTextMode(text: string, encodingTable: number[]): number[] {
     if (shiftValue < 5) packValue(shiftValue);
 
     // Add character value (offset from table)
-    packValue(charCode - encodingTable[tableIndex + 2]);
+    packValue(charCode - baseValue);
   }
 
   // Add padding if needed (not for X12 mode)
@@ -345,10 +396,11 @@ function selectBestEncoding(text: string): number[] {
   ];
 
   // Find the shortest valid encoding
+  const initialEncoding = encodingStrategies[0]?.() ?? [];
   return encodingStrategies.reduce((best, encode) => {
     const result = encode();
     return (result.length > 0 && result.length < best.length) ? result : best;
-  }, encodingStrategies[0]());
+  }, initialEncoding);
 }
 
 // ============================================================================
@@ -373,13 +425,16 @@ function calculateSymbolSize(encodedLength: number, useRectangular?: boolean): S
 
   if (useRectangular && encodedLength < 50) {
     // Find smallest rectangle that fits the data
+    // RECTANGULAR_SIZES is a compile-time constant
     do {
-      symbolWidth = RECTANGULAR_SIZES[++symbolIndex];
+      const nextWidth = RECTANGULAR_SIZES[++symbolIndex];
+      if (nextWidth === undefined) return null; // No suitable size found
+      symbolWidth = nextWidth;
       symbolHeight = 6 + (symbolIndex & 12); // Heights: 6, 6, 6, 8, 8, 8...
       totalCodewords = symbolWidth * symbolHeight / 8;
-    } while (totalCodewords - RECTANGULAR_SIZES[++symbolIndex] < encodedLength);
+    } while (totalCodewords - RECTANGULAR_SIZES[++symbolIndex]! < encodedLength);
 
-    rsCheckwords = RECTANGULAR_SIZES[symbolIndex];
+    rsCheckwords = RECTANGULAR_SIZES[symbolIndex]!;
 
     // Wide rectangles need 2 column regions
     if (symbolWidth > 25) numColRegions = 2;
@@ -389,6 +444,7 @@ function calculateSymbolSize(encodedLength: number, useRectangular?: boolean): S
     let sizeIncrement = 2;
 
     // Find smallest square that fits the data
+    // SQUARE_RS_CHECKWORDS is a compile-time constant
     do {
       if (++symbolIndex == SQUARE_RS_CHECKWORDS.length) {
         return null; // Message too long
@@ -401,10 +457,10 @@ function calculateSymbolSize(encodedLength: number, useRectangular?: boolean): S
 
       symbolWidth = symbolHeight += sizeIncrement;
       totalCodewords = (symbolWidth * symbolHeight) >> 3;
-    } while (totalCodewords - SQUARE_RS_CHECKWORDS[symbolIndex] < encodedLength);
+    } while (totalCodewords - SQUARE_RS_CHECKWORDS[symbolIndex]! < encodedLength);
 
     totalCodewords = (symbolWidth * symbolHeight) >> 3;
-    rsCheckwords = SQUARE_RS_CHECKWORDS[symbolIndex];
+    rsCheckwords = SQUARE_RS_CHECKWORDS[symbolIndex]!;
 
     // Large symbols need multiple regions
     if (symbolWidth > 27) {
@@ -494,10 +550,16 @@ function buildRsGeneratorPolynomial(
   const polynomial = new Array(rsPerBlock + 1).fill(0);
   polynomial[rsPerBlock] = 0;
 
+  // GF tables are mathematically complete (255 values each)
+  // polynomial indices are bounded by rsPerBlock
   for (let col = 1; col <= rsPerBlock; col++) {
     polynomial[rsPerBlock - col] = 1;
     for (let row = rsPerBlock - col; row < rsPerBlock; row++) {
-      polynomial[row] = polynomial[row + 1] ^ expTable[(logTable[polynomial[row]] + col) % 255];
+      const polyVal = polynomial[row]!;
+      const nextPoly = polynomial[row + 1]!;
+      const logVal = logTable[polyVal]!;
+      const expIdx = (logVal + col) % 255;
+      polynomial[row] = nextPoly ^ expTable[expIdx]!;
     }
   }
 
@@ -515,7 +577,7 @@ function calculateReedSolomon(encodedData: number[], rsCheckwords: number, numBl
   const encodedLength = encodedData.length;
   const rsPerBlock = rsCheckwords / numBlocks;
 
-  // Build Galois field tables
+  // Build Galois field tables (mathematically complete)
   const { logTable, expTable } = buildGaloisFieldTables();
 
   // Build RS generator polynomial
@@ -526,16 +588,28 @@ function calculateReedSolomon(encodedData: number[], rsCheckwords: number, numBl
     const rsRemainder = new Array(rsPerBlock + 1).fill(0);
 
     // Process data codewords for this block
+    // All arrays here are internally managed with known bounds
     for (let i = col; i < encodedLength; i += numBlocks) {
-      const feedback = rsRemainder[0] ^ encodedData[i];
+      const feedback = rsRemainder[0]! ^ encodedData[i]!;
       for (let j = 0; j < rsPerBlock; j++) {
-        rsRemainder[j] = rsRemainder[j + 1] ^ (feedback ? expTable[(logTable[rsPolynomial[j]] + logTable[feedback]) % 255] : 0);
+        const nextRemainder = rsRemainder[j + 1]!;
+        if (feedback) {
+          // feedback !== 0: need to do GF multiplication
+          // GF tables and rsPolynomial are mathematically complete
+          const polyLog = logTable[rsPolynomial[j]!]!;
+          const feedbackLog = logTable[feedback]!;
+          const expIdx = (polyLog + feedbackLog) % 255;
+          rsRemainder[j] = nextRemainder ^ expTable[expIdx]!;
+        } else {
+          // feedback === 0: XOR with 0 is identity
+          rsRemainder[j] = nextRemainder;
+        }
       }
     }
 
     // Interleave RS codewords into output
     for (let i = 0; i < rsPerBlock; i++) {
-      encodedData[encodedLength + col + i * numBlocks] = rsRemainder[i];
+      encodedData[encodedLength + col + i * numBlocks] = rsRemainder[i]!;
     }
   }
 }
@@ -672,10 +746,11 @@ function placeDataCodewords(
     }
 
     // Place 8 modules for current codeword
-    for (let codeword = encodedData[dataIndex++], bitIndex = 0; codeword > 0; bitIndex += 2, codeword >>= 1) {
+    // encodedData validated by caller, placementPattern indices are fixed (0-15)
+    for (let codeword = encodedData[dataIndex++]!, bitIndex = 0; codeword > 0; bitIndex += 2, codeword >>= 1) {
       if (codeword & 1) {
-        let tempX = col + placementPattern[bitIndex];
-        let tempY = row + placementPattern[bitIndex + 1];
+        let tempX = col + placementPattern[bitIndex]!;
+        let tempY = row + placementPattern[bitIndex + 1]!;
 
         // Wrap coordinates if negative
         if (tempX < 0) {
@@ -725,11 +800,23 @@ function placeDataCodewords(
  * // For rectangular symbols
  * const result = encodeMessage('ABC123', true);
  *
+ * @example
+ * // Allow empty message (produces minimal DataMatrix)
+ * const result = encodeMessage('', false, true);
+ *
  * @param text - The message to encode
  * @param useRectangular - Use rectangular format instead of square (default: false)
+ * @param allowEmptyMessage - Allow empty message without throwing error (default: false)
  * @returns DataMatrixResult containing the pixel matrix and dimensions
+ * @throws {Error} "Message cannot be empty" - When message is empty and allowEmptyMessage is false
+ * @throws {Error} "Message too long: encoded length X exceeds DataMatrix capacity" - When encoded message exceeds maximum capacity (~1556 bytes for largest symbol)
  */
-export function encodeMessage(text: string, useRectangular?: boolean): DataMatrixResult {
+export function encodeMessage(text: string, useRectangular?: boolean, allowEmptyMessage?: boolean): DataMatrixResult {
+  // Validate input
+  if ((!text || text.length === 0) && !allowEmptyMessage) {
+    throw new DataMatrixError('EMPTY_MESSAGE', 'Message cannot be empty');
+  }
+
   /** 2D matrix storing the barcode pattern (1 = black, 0/undefined = white) */
   const matrix: number[][] = [];
 
@@ -751,7 +838,7 @@ export function encodeMessage(text: string, useRectangular?: boolean): DataMatri
   // Step 2: Calculate symbol size
   const symbolSize = calculateSymbolSize(encodedData.length, useRectangular);
   if (!symbolSize) {
-    throw new Error(`Message too long: encoded length ${encodedData.length} exceeds DataMatrix capacity`);
+    throw new DataMatrixError('MESSAGE_TOO_LONG', `Message too long: encoded length ${encodedData.length} exceeds DataMatrix capacity`);
   }
 
   // Step 3: Add padding codewords

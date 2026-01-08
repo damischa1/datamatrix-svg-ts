@@ -219,12 +219,13 @@ function generatePathData(
     let currentX = width;
 
     while (currentX--) {
-      if (matrix[currentY] && matrix[currentY][currentX]) {
+      const row = matrix[currentY];
+      if (row && row[currentX]) {
         if (optimized) {
           // Accumulate horizontal runs for optimized output
           runLength++;
 
-          if (!matrix[currentY][currentX - 1]) {
+          if (!row[currentX - 1]) {
             // End of run - output rectangle
             pathData += 'M' + currentX + ',' + currentY + 'h' + runLength + 'v1h-' + runLength + 'v-1z';
             runLength = 0;

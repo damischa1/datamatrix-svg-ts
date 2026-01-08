@@ -18,4 +18,6 @@ export {
   type NamedColor
 } from './datamatrix-svg';
 
+export { DataMatrixError, type DataMatrixErrorCode } from './encoder';
+
 export { DATAMatrix as default } from './datamatrix-svg';

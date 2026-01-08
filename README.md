@@ -46,12 +46,6 @@ function DataMatrixCode({ message }: { message: string }) {
 
   return <div ref={containerRef} />;
 }
-      containerRef.current.appendChild(svg);
-    }
-  }, [message]);
-
-  return <div ref={containerRef} />;
-}
 
 // With custom colors
 function DataMatrixWithColors({ message }: { message: string }) {
@@ -74,6 +68,48 @@ function DataMatrixWithColors({ message }: { message: string }) {
 
   return <div ref={containerRef} style={{ color: 'navy' }} />;
 }
+```
+
+## Error Handling
+
+The library throws `DataMatrixError` for expected validation errors that can be caught and handled:
+
+```typescript
+import { DATAMatrix, DataMatrixError } from 'datamatrix-svg-ts';
+
+try {
+  const svg = DATAMatrix({ message: userInput });
+} catch (e) {
+  if (e instanceof DataMatrixError) {
+    // Handle validation errors
+    switch (e.code) {
+      case 'EMPTY_MESSAGE':
+        console.log('Please enter a message');
+        break;
+      case 'MESSAGE_TOO_LONG':
+        console.log('Message exceeds DataMatrix capacity (~1556 bytes)');
+        break;
+    }
+  } else {
+    // Unexpected error (programming bug) - rethrow
+    throw e;
+  }
+}
+```
+
+### Error Codes
+
+| Code | Description |
+|------|-------------|
+| `EMPTY_MESSAGE` | Message is empty (and `allowEmptyMessage` is false) |
+| `MESSAGE_TOO_LONG` | Encoded message exceeds DataMatrix maximum capacity |
+
+### Allowing Empty Messages
+
+By default, empty messages throw an error. If you need to allow empty messages (produces a minimal DataMatrix), use the `allowEmptyMessage` option:
+
+```typescript
+const svg = DATAMatrix({ message: '', allowEmptyMessage: true });
 ```
 
 ## Two-Step API
@@ -102,13 +138,21 @@ const svg = matrixToSvg(matrixResult, {
 
 Main function - generates a DataMatrix barcode as an SVG element.
 
-### `encodeToMatrix(message, rectangular?): DataMatrixResult`
+**Throws:** `DataMatrixError` if message is empty or too long.
+
+### `encodeToMatrix(message, rectangular?, allowEmptyMessage?): DataMatrixResult`
 
 Encodes a message into a pixel matrix (for custom rendering).
+
+**Throws:** `DataMatrixError` if message is empty (unless `allowEmptyMessage` is true) or too long.
 
 ### `matrixToSvg(matrixResult, options?): SVGSVGElement`
 
 Converts a matrix to an SVG element.
+
+### `DataMatrixError`
+
+Custom error class for validation errors. Has `code` property (`DataMatrixErrorCode`) and `message`.
 
 ### Options
 
@@ -119,6 +163,7 @@ Converts a matrix to an SVG element.
 | `padding` | `number` | `2` | Padding in modules |
 | `palette` | `Palette` | `{ foreground: '#000' }` | Colors |
 | `rectangular` | `boolean` | `false` | Rectangular format |
+| `allowEmptyMessage` | `boolean` | `false` | Allow empty message without error |
 
 ### Palette Colors
 
@@ -129,3 +174,4 @@ Supports all SVG color values: `#hex`, `rgb()`, `hsl()`, named colors, `currentC
 MIT License
 
 Based on [datamatrix-svg](https://github.com/datalog/datamatrix-svg) by Constantine.
+

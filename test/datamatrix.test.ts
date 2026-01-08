@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { createRequire } from 'module';
-import DATAMatrixTS from '../src/datamatrix-svg';
+import DATAMatrixTS, { DataMatrixError } from '../src/datamatrix-svg';
 
 // Setup global document for both JS and TS versions
 const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -252,5 +252,52 @@ describe('Output Sample SVGs', () => {
     console.log('='.repeat(60));
 
     expect(svgTSString).toBe(svgJSString);
+  });
+});
+
+describe('DataMatrix Error Handling', () => {
+  it('should throw DataMatrixError with MESSAGE_TOO_LONG code when message exceeds maximum capacity', () => {
+    // DataMatrix maximum capacity is ~1556 ASCII chars for largest 144x144 symbol
+    // Create a message that's definitely too long
+    const tooLongMessage = 'A'.repeat(3000);
+    
+    expect(() => DATAMatrixTS({ message: tooLongMessage })).toThrow(DataMatrixError);
+    
+    try {
+      DATAMatrixTS({ message: tooLongMessage });
+    } catch (e) {
+      expect(e).toBeInstanceOf(DataMatrixError);
+      expect((e as DataMatrixError).code).toBe('MESSAGE_TOO_LONG');
+      expect((e as DataMatrixError).message).toContain('Message too long');
+    }
+  });
+
+  it('should throw DataMatrixError with EMPTY_MESSAGE code for empty message', () => {
+    expect(() => DATAMatrixTS({ message: '' })).toThrow(DataMatrixError);
+    
+    try {
+      DATAMatrixTS({ message: '' });
+    } catch (e) {
+      expect(e).toBeInstanceOf(DataMatrixError);
+      expect((e as DataMatrixError).code).toBe('EMPTY_MESSAGE');
+      expect((e as DataMatrixError).message).toBe('Message cannot be empty');
+    }
+  });
+
+  it('should allow empty message when allowEmptyMessage is true', () => {
+    // With allowEmptyMessage: true, empty message should produce a minimal DataMatrix
+    const svg = DATAMatrixTS({ message: '', allowEmptyMessage: true });
+    expect(svg).toBeDefined();
+    expect(svg.outerHTML).toContain('<svg');
+  });
+
+  it('should handle message near maximum capacity', () => {
+    // ~1500 characters should still work (close to limit but under)
+    const nearMaxMessage = 'A'.repeat(1500);
+    
+    // Should not throw
+    const svg = DATAMatrixTS({ message: nearMaxMessage });
+    expect(svg).toBeDefined();
+    expect(svg.outerHTML).toContain('<svg');
   });
 });

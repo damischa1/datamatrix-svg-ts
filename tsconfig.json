@@ -16,6 +16,7 @@
     // Strict type checking
     "strict": true,
     "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
     
     // Interop
     "esModuleInterop": true,

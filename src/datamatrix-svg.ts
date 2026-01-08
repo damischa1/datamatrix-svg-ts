@@ -43,6 +43,7 @@ import type { Palette } from './svg-renderer';
 // ============================================================================
 
 export type { DataMatrixResult } from './encoder';
+export { DataMatrixError, type DataMatrixErrorCode } from './encoder';
 export type { NamedColor, Palette, SvgColor, SvgOptions } from './svg-renderer';
 
 // ============================================================================
@@ -65,6 +66,8 @@ export interface DataMatrixOptions {
   palette?: Palette;
   /** Use verbose SVG output. Default: false */
   verbose?: boolean;
+  /** Allow empty message. Default: false */
+  allowEmptyMessage?: boolean;
 }
 
 // ============================================================================
@@ -90,10 +93,13 @@ export interface DataMatrixOptions {
  *
  * @param message - The text message to encode
  * @param useRectangular - Use rectangular format instead of square (default: false)
+ * @param allowEmptyMessage - Allow empty message without throwing error (default: false)
  * @returns DataMatrixResult containing the pixel matrix and dimensions
+ * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
+ * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When encoded message exceeds DataMatrix capacity (~1556 bytes max)
  */
-export function encodeToMatrix(message: string, useRectangular?: boolean): DataMatrixResult {
-  return encodeMessage(message, useRectangular);
+export function encodeToMatrix(message: string, useRectangular?: boolean, allowEmptyMessage?: boolean): DataMatrixResult {
+  return encodeMessage(message, useRectangular, allowEmptyMessage);
 }
 
 // Re-export matrixToSvg directly from svg-renderer
@@ -122,13 +128,15 @@ export { matrixToSvg };
  *
  * @param options - Configuration options or just a string message
  * @returns SVG element containing the DataMatrix barcode
+ * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
+ * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When encoded message exceeds DataMatrix capacity (~1556 bytes max)
  */
 export function DATAMatrix(options: DataMatrixOptions | string): SVGSVGElement {
   // Parse options
   const opts: DataMatrixOptions = ('string' == typeof options) ? { message: options } : options || {};
   
   // Generate the barcode matrix
-  const matrixResult = encodeToMatrix(opts.message || '', opts.rectangular);
+  const matrixResult = encodeToMatrix(opts.message || '', opts.rectangular, opts.allowEmptyMessage);
   
   // Convert to SVG with the same options
   return matrixToSvg(matrixResult, {
