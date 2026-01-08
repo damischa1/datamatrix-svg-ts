@@ -16,20 +16,28 @@
 // Types
 // ============================================================================
 
+/** Color palette for DataMatrix rendering */
+export interface Palette {
+  /** Foreground (module) color in hex format (default: '#000') */
+  foreground?: string;
+  /** Background color in hex format (default: transparent) */
+  background?: string;
+}
+
 /** Configuration options for DataMatrix generation */
 export interface DataMatrixOptions {
   /** Message to encode in the DataMatrix */
-  msg?: string;
-  /** Use rectangular format instead of square */
-  rct?: boolean;
+  message?: string;
+  /** Use rectangular format instead of square (default: false) */
+  rectangular?: boolean;
   /** Output dimension in pixels (default: 256) */
-  dim?: number;
-  /** Padding around the barcode (default: 2) */
-  pad?: number;
-  /** Color palette: [foreground, background?] */
-  pal?: string[];
-  /** Verbose mode - generates non-optimized SVG paths */
-  vrb?: boolean;
+  dimension?: number;
+  /** Padding around the barcode in modules (default: 2) */
+  padding?: number;
+  /** Color palette for rendering */
+  palette?: Palette;
+  /** Verbose mode - generates non-optimized SVG paths (default: false) */
+  verbose?: boolean;
 }
 
 /** Result from encoding a message into a matrix */
@@ -45,13 +53,13 @@ export interface DataMatrixResult {
 /** Options for SVG generation from matrix */
 export interface SvgOptions {
   /** Output dimension in pixels (default: 256) */
-  dim?: number;
-  /** Padding around the barcode (default: 2) */
-  pad?: number;
-  /** Color palette: [foreground, background?] */
-  pal?: string[];
-  /** Verbose mode - generates non-optimized SVG paths */
-  vrb?: boolean;
+  dimension?: number;
+  /** Padding around the barcode in modules (default: 2) */
+  padding?: number;
+  /** Color palette for rendering */
+  palette?: Palette;
+  /** Verbose mode - generates non-optimized SVG paths (default: false) */
+  verbose?: boolean;
 }
 
 /** Symbol size parameters calculated for the data */
@@ -931,9 +939,9 @@ export function encodeToMatrix(message: string, useRectangular?: boolean): DataM
  * // With custom options
  * const matrixResult = encodeToMatrix('Hello World!');
  * const svg = matrixToSvg(matrixResult, {
- *   dim: 512,
- *   pad: 4,
- *   pal: ['#000000', '#ffffff']
+ *   dimension: 512,
+ *   padding: 4,
+ *   palette: { foreground: '#000000', background: '#ffffff' }
  * });
  *
  * @param matrixResult - The result from encodeToMatrix()
@@ -945,15 +953,15 @@ export function matrixToSvg(matrixResult: DataMatrixResult, options?: SvgOptions
   const { matrix, width: matrixWidth, height: matrixHeight } = matrixResult;
   
   // Parse options with defaults
-  const palette = opts.pal || ['#000'];
-  const dimension = Math.abs(opts.dim!) || 256;
-  let padding = Math.abs(opts.pad!);
+  const palette = opts.palette || {};
+  const dimension = Math.abs(opts.dimension!) || 256;
+  let padding = Math.abs(opts.padding!);
   padding = (padding > -1) ? padding : 2;
-  const useOptimizedPath = !opts.vrb;
+  const useOptimizedPath = !opts.verbose;
 
   // Resolve colors
-  const foregroundColor = resolveColor(palette[0], '#000')!;
-  const backgroundColor = resolveColor(palette[1], null);
+  const foregroundColor = resolveColor(palette.foreground, '#000')!;
+  const backgroundColor = resolveColor(palette.background, null);
 
   // Calculate SVG dimensions
   const svgWidth = matrixWidth + padding * 2;
@@ -989,12 +997,12 @@ export function matrixToSvg(matrixResult: DataMatrixResult, options?: SvgOptions
  * @example
  * // With options
  * const svg = DATAMatrix({
- *   msg: "Your message",
- *   dim: 256,
- *   rct: false,
- *   pad: 2,
- *   pal: ["#000000", "#f2f4f8"],
- *   vrb: false
+ *   message: "Your message",
+ *   dimension: 256,
+ *   rectangular: false,
+ *   padding: 2,
+ *   palette: { foreground: "#000000", background: "#f2f4f8" },
+ *   verbose: false
  * });
  *
  * @param options - Configuration options or just a string message
@@ -1002,17 +1010,17 @@ export function matrixToSvg(matrixResult: DataMatrixResult, options?: SvgOptions
  */
 export function DATAMatrix(options: DataMatrixOptions | string): SVGSVGElement {
   // Parse options
-  const opts: DataMatrixOptions = ('string' == typeof options) ? { msg: options } : options || {};
+  const opts: DataMatrixOptions = ('string' == typeof options) ? { message: options } : options || {};
   
   // Generate the barcode matrix
-  const matrixResult = encodeToMatrix(opts.msg || '', opts.rct);
+  const matrixResult = encodeToMatrix(opts.message || '', opts.rectangular);
   
   // Convert to SVG with the same options
   return matrixToSvg(matrixResult, {
-    dim: opts.dim,
-    pad: opts.pad,
-    pal: opts.pal,
-    vrb: opts.vrb
+    dimension: opts.dimension,
+    padding: opts.padding,
+    palette: opts.palette,
+    verbose: opts.verbose
   });
 }
 

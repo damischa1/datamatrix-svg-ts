@@ -136,15 +136,24 @@ describe('DataMatrix SVG Generation', () => {
   });
 
   it('should generate identical SVG with options', () => {
-    const options = {
+    // Use old API for JS version
+    const jsOptions = {
       msg: 'Test message',
       dim: 200,
       pad: 4,
       pal: ['#000000', '#ffffff'],
     };
 
-    const svgJS = DATAMatrixJS(options);
-    const svgTS = DATAMatrixTS(options);
+    // Use new API for TS version
+    const tsOptions = {
+      message: 'Test message',
+      dimension: 200,
+      padding: 4,
+      palette: { foreground: '#000000', background: '#ffffff' },
+    };
+
+    const svgJS = DATAMatrixJS(jsOptions);
+    const svgTS = DATAMatrixTS(tsOptions);
 
     const svgJSString = svgJS.outerHTML;
     const svgTSString = svgTS.outerHTML;
@@ -157,13 +166,20 @@ describe('DataMatrix SVG Generation', () => {
   });
 
   it('should generate identical rectangular DataMatrix', () => {
-    const options = {
+    // Use old API for JS version
+    const jsOptions = {
       msg: '12345',
       rct: true,
     };
 
-    const svgJS = DATAMatrixJS(options);
-    const svgTS = DATAMatrixTS(options);
+    // Use new API for TS version
+    const tsOptions = {
+      message: '12345',
+      rectangular: true,
+    };
+
+    const svgJS = DATAMatrixJS(jsOptions);
+    const svgTS = DATAMatrixTS(tsOptions);
 
     const svgJSString = svgJS.outerHTML;
     const svgTSString = svgTS.outerHTML;
