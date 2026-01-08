@@ -39,16 +39,16 @@
     "typescript",
     "esm"
   ],
-  "author": "",
+  "author": "Mika Salminen",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/datamatrix-svg-ts.git"
+    "url": "git+https://github.com/damischa1/datamatrix-svg-ts.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/datamatrix-svg-ts/issues"
+    "url": "https://github.com/damischa1/datamatrix-svg-ts/issues"
   },
-  "homepage": "https://github.com/yourusername/datamatrix-svg-ts#readme",
+  "homepage": "https://github.com/damischa1/datamatrix-svg-ts#readme",
   "devDependencies": {
     "@types/jsdom": "^27.0.0",
     "@types/node": "^25.0.3",

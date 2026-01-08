@@ -206,7 +206,7 @@ function createSvgElement<T extends SVGElement = SVGElement>(
  * @returns SVG path data string
  */
 function generatePathData(
-  matrix: number[][],
+  matrix: readonly (readonly number[])[],
   width: number,
   height: number,
   optimized: boolean

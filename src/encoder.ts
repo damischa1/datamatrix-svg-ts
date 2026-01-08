@@ -17,11 +17,11 @@
  */
 export interface DataMatrixResult {
   /** 2D array of pixel values (1 = black module, 0/undefined = white module) */
-  matrix: number[][];
+  readonly matrix: readonly (readonly number[])[];
   /** Width of the barcode in modules (including finder pattern) */
-  width: number;
+  readonly width: number;
   /** Height of the barcode in modules (including finder pattern) */
-  height: number;
+  readonly height: number;
 }
 
 /**
@@ -751,7 +751,7 @@ export function encodeMessage(text: string, useRectangular?: boolean): DataMatri
   // Step 2: Calculate symbol size
   const symbolSize = calculateSymbolSize(encodedData.length, useRectangular);
   if (!symbolSize) {
-    return { matrix, width: 0, height: 0 }; // Message too long
+    throw new Error(`Message too long: encoded length ${encodedData.length} exceeds DataMatrix capacity`);
   }
 
   // Step 3: Add padding codewords
