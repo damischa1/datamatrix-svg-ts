@@ -16,8 +16,8 @@ export {
   type Palette,
   type SvgColor,
   type NamedColor
-} from './datamatrix-svg';
+} from './datamatrix-svg.js';
 
-export { DataMatrixError, type DataMatrixErrorCode } from './encoder';
+export { DataMatrixError, type DataMatrixErrorCode } from './encoder.js';
 
-export { DATAMatrix as default } from './datamatrix-svg';
+export { DATAMatrix as default } from './datamatrix-svg.js';

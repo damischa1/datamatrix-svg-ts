@@ -2,8 +2,8 @@
   "compilerOptions": {
     // Output
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "lib": ["ES2022", "DOM"],
     
     // Output files

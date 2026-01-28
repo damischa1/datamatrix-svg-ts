@@ -33,18 +33,18 @@
  * const svg = matrixToSvg(matrixResult, { dimension: 512 });
  */
 
-import { encodeMessage } from './encoder';
-import type { DataMatrixResult } from './encoder';
-import { matrixToSvg } from './svg-renderer';
-import type { Palette } from './svg-renderer';
+import { encodeMessage } from './encoder.js';
+import type { DataMatrixResult } from './encoder.js';
+import { matrixToSvg } from './svg-renderer.js';
+import type { Palette } from './svg-renderer.js';
 
 // ============================================================================
 // Re-export Types
 // ============================================================================
 
-export type { DataMatrixResult } from './encoder';
-export { DataMatrixError, type DataMatrixErrorCode } from './encoder';
-export type { NamedColor, Palette, SvgColor, SvgOptions } from './svg-renderer';
+export type { DataMatrixResult } from './encoder.js';
+export { DataMatrixError, type DataMatrixErrorCode } from './encoder.js';
+export type { NamedColor, Palette, SvgColor, SvgOptions } from './svg-renderer.js';
 
 // ============================================================================
 // Types

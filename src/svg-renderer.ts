@@ -7,7 +7,7 @@
  * @module svg-renderer
  */
 
-import type { DataMatrixResult } from './encoder';
+import type { DataMatrixResult } from './encoder.js';
 
 // ============================================================================
 // Types
