@@ -123,8 +123,9 @@ const TEXT_TABLE = [
   64, 1, 43,
   90, 2, 64,  // Uppercase in Set 2
   95, 1, 69,
+  96, 2, 96,  // Backtick is value 0 in Set 3
   122, 9, 83, // Lowercase a-z in basic set
-  127, 2, 96,
+  127, 2, 96, // {|}~DEL in Set 3
   255, 1, 0
 ];
 
