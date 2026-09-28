@@ -160,6 +160,12 @@ const SQUARE_RS_CHECKWORDS = [
   56, 68, 84, 112, 144, 192, 224, 272, 336, 408, 496, 620
 ];
 
+/**
+ * Upper bound for the input size in bytes: the largest symbol (144x144) holds
+ * 1558 data codewords, and the densest encoding packs two digits per codeword.
+ */
+const MAX_ENCODABLE_BYTES = 1558 * 2;
+
 /** Nominal L-shaped module placement pattern (relative coordinates) */
 const NOMINAL_PATTERN: number[] = [
   0, 0,
@@ -833,7 +839,20 @@ export function encodeMessage(text: string, useRectangular?: boolean, allowEmpty
 
   // Convert to UTF-8 bytes using TextEncoder
   const utf8Bytes = new TextEncoder().encode(text);
-  const utf8Text = String.fromCharCode(...utf8Bytes);
+
+  // Nothing longer than MAX_ENCODABLE_BYTES can ever fit, so reject it before
+  // running every encoder over a potentially huge input.
+  if (utf8Bytes.length > MAX_ENCODABLE_BYTES) {
+    throw new DataMatrixError(
+      'MESSAGE_TOO_LONG',
+      `Message too long: ${utf8Bytes.length} bytes exceeds DataMatrix capacity`
+    );
+  }
+
+  // One char per byte (0-255). A loop instead of String.fromCharCode(...bytes),
+  // which overflows the call stack on large inputs.
+  let utf8Text = '';
+  for (const byte of utf8Bytes) utf8Text += String.fromCharCode(byte);
 
   // Step 1: Select best encoding mode
   const encodedData = selectBestEncoding(utf8Text);
