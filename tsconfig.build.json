@@ -1,0 +1,16 @@
+{
+  // Emits dist/ for publishing: ESM JavaScript, declarations and source maps
+  // pointing at src/ (shipped in the package).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // The library runs in browsers and Node without Node-specific APIs.
+    "types": [],
+    "noEmit": false,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src"]
+}

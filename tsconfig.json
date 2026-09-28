@@ -1,33 +1,22 @@
 {
+  // Type-checks sources, tests and config (npm run typecheck).
+  // The published build uses tsconfig.build.json.
   "compilerOptions": {
-    // Output
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022", "DOM"],
-    
-    // Output files
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    
-    // Strict type checking
+    "types": ["node"],
+
     "strict": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
-    
-    // Interop
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    
-    // Other
+    "noFallthroughCasesInSwitch": true,
+
+    "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test"]
+  "include": ["src", "test", "vitest.config.ts"]
 }
