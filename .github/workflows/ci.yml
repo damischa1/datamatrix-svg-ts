@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Lint package (publint, arethetypeswrong)
+        run: npm run check:package
+      - name: Pack
+        run: npm pack
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: datamatrix-svg-ts-*.tgz
+          retention-days: 7
+
+  # The dev toolchain needs Node 22+, but the published package supports Node 18+
+  # ("engines"). Install the packed tarball on older runtimes and use it there.
+  compat:
+    name: Install on Node ${{ matrix.node }}
+    needs: package
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20]
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: package
+      - name: Import and encode
+        run: |
+          npm init -y > /dev/null
+          npm install ./datamatrix-svg-ts-*.tgz
+          node --input-type=module -e "
+            import DATAMatrix, { encodeToMatrix, DataMatrixError } from 'datamatrix-svg-ts';
+            if (typeof DATAMatrix !== 'function') throw new Error('default export missing');
+            const { width, height } = encodeToMatrix('Äiti ja isä');
+            if (width !== 18 || height !== 18) throw new Error('unexpected size ' + width + 'x' + height);
+            try { encodeToMatrix(''); throw new Error('expected EMPTY_MESSAGE'); }
+            catch (e) { if (!(e instanceof DataMatrixError)) throw e; }
+            console.log('ok', width + 'x' + height);
+          "
