@@ -24,9 +24,10 @@ export type NamedColor =
 /**
  * SVG-compatible color values
  * Supports all standard SVG/CSS color formats:
- * - Hex: #RGB, #RRGGBB
+ * - Hex: #RGB, #RGBA, #RRGGBB, #RRGGBBAA
  * - RGB: rgb(r, g, b), rgba(r, g, b, a)
  * - HSL: hsl(h, s%, l%), hsla(h, s%, l%, a)
+ * - hwb(), lab(), lch(), oklab(), oklch(), color()
  * - Named colors: black, white, red, etc.
  * - Special: currentColor, inherit, none, transparent
  * - URL references: url(#gradient-id)
@@ -37,6 +38,12 @@ export type SvgColor =
   | `rgba(${string})`         // RGBA function
   | `hsl(${string})`          // HSL function
   | `hsla(${string})`         // HSLA function
+  | `hwb(${string})`          // HWB function
+  | `lab(${string})`          // CIE Lab
+  | `lch(${string})`          // CIE LCH
+  | `oklab(${string})`        // Oklab
+  | `oklch(${string})`        // Oklch
+  | `color(${string})`        // color() with a color space
   | `url(${string})`          // URL references (gradients, patterns)
   | 'currentColor'            // Inherits from CSS color property
   | 'inherit'                 // Inherits from parent
@@ -44,7 +51,8 @@ export type SvgColor =
   | NamedColor;               // CSS named colors
 
 /**
- * Color palette for the barcode
+ * Color palette for the barcode. A value that is not a recognized SVG color
+ * falls back to the default (black foreground, no background).
  */
 export interface Palette {
   /** Color for data modules (dark cells). Default: '#000' */
@@ -105,7 +113,7 @@ const CSS_NAMED_COLORS = new Set([
   'rosybrown', 'royalblue', 'saddlebrown', 'salmon', 'sandybrown', 'seagreen',
   'seashell', 'sienna', 'skyblue', 'slateblue', 'slategray', 'slategrey',
   'snow', 'springgreen', 'steelblue', 'tan', 'thistle', 'tomato', 'turquoise',
-  'violet', 'wheat', 'whitesmoke', 'yellowgreen'
+  'violet', 'wheat', 'whitesmoke', 'yellowgreen', 'rebeccapurple'
 ]);
 
 // ============================================================================
@@ -114,46 +122,20 @@ const CSS_NAMED_COLORS = new Set([
 
 /**
  * Validates SVG-compatible color values
- * Supports: hex (#RGB, #RRGGBB), rgb(), rgba(), hsl(), hsla(), named colors,
- * currentColor, inherit, none, and url() references
- * 
- * @param color - Color string to validate
+ * Supports: hex (#RGB, #RGBA, #RRGGBB, #RRGGBBAA), CSS color functions (rgb, hsl,
+ * hwb, lab, lch, oklab, oklch, color), named colors, currentColor, inherit, none,
+ * transparent and url() references. Function arguments are not validated.
+ *
+ * @param color - Color string to validate (already trimmed)
  * @returns true if the color is valid for SVG
  */
 function isValidSvgColor(color: string): boolean {
-  const trimmed = color.trim().toLowerCase();
-  
-  // Hex colors: #RGB or #RRGGBB
-  if (/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color)) {
-    return true;
-  }
-  
-  // rgb() and rgba()
-  if (/^rgba?\s*\(/.test(trimmed)) {
-    return true;
-  }
-  
-  // hsl() and hsla()
-  if (/^hsla?\s*\(/.test(trimmed)) {
-    return true;
-  }
-  
-  // Special SVG/CSS values
-  if (['currentcolor', 'inherit', 'none', 'transparent'].includes(trimmed)) {
-    return true;
-  }
-  
-  // URL references (gradients, patterns)
-  if (/^url\s*\(/.test(trimmed)) {
-    return true;
-  }
-  
-  // Named colors
-  if (CSS_NAMED_COLORS.has(trimmed)) {
-    return true;
-  }
-  
-  return false;
+  const lower = color.toLowerCase();
+
+  return /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(lower)
+    || /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|url)\s*\(.*\)$/.test(lower)
+    || ['currentcolor', 'inherit', 'none', 'transparent'].includes(lower)
+    || CSS_NAMED_COLORS.has(lower);
 }
 
 /**
@@ -161,13 +143,11 @@ function isValidSvgColor(color: string): boolean {
  * 
  * @param color - Color string to validate (hex, rgb, hsl, named, currentColor, etc.)
  * @param defaultColor - Default color if invalid or undefined
- * @returns Valid SVG color or default
+ * @returns Valid SVG color (trimmed) or default
  */
 function resolveColor(color: string | undefined, defaultColor: string | null): string | null {
-  if (color && isValidSvgColor(color)) {
-    return color;
-  }
-  return defaultColor;
+  const trimmed = typeof color === 'string' ? color.trim() : '';
+  return trimmed && isValidSvgColor(trimmed) ? trimmed : defaultColor;
 }
 
 // ============================================================================

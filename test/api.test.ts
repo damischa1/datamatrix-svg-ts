@@ -160,6 +160,35 @@ describe('option validation', () => {
   });
 });
 
+describe('colors', () => {
+  const fill = (foreground: string) =>
+    matrixToSvg(encodeToMatrix('c'), { palette: { foreground: foreground as never } }).getAttribute('fill');
+
+  it('accepts hex with and without alpha', () => {
+    for (const color of ['#abc', '#abcd', '#aabbcc', '#aabbccdd', '#AABBCC']) {
+      expect(fill(color)).toBe(color);
+    }
+  });
+
+  it('accepts CSS color functions, keywords and named colors', () => {
+    for (const color of ['rgb(0 0 0)', 'rgba(0,0,0,.5)', 'hsl(0 0% 0%)', 'hwb(0 0% 100%)',
+      'lab(0% 0 0)', 'lch(0% 0 0)', 'oklab(0 0 0)', 'oklch(0 0 0)', 'color(display-p3 0 0 0)',
+      'url(#gradient)', 'currentColor', 'inherit', 'none', 'transparent', 'rebeccapurple', 'Navy']) {
+      expect(fill(color)).toBe(color);
+    }
+  });
+
+  it('trims whitespace', () => {
+    expect(fill('  #123456 ')).toBe('#123456');
+  });
+
+  it('falls back to the default for unrecognized values', () => {
+    for (const color of ['#12', '#12345', '#gggggg', 'blurple', 'rgb(0,0,0', '', 'red; x']) {
+      expect(fill(color)).toBe('#000');
+    }
+  });
+});
+
 describe('encodeToMatrix', () => {
   it('returns the symbol size including the finder pattern', () => {
     const result = encodeToMatrix('A');
