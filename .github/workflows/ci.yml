@@ -74,11 +74,15 @@ jobs:
           npm init -y > /dev/null
           npm install ./datamatrix-svg-ts-*.tgz
           node --input-type=module -e "
-            import DATAMatrix, { encodeToMatrix, DataMatrixError } from 'datamatrix-svg-ts';
+            import DATAMatrix, { encodeToMatrix, toSvgString, DataMatrixError } from 'datamatrix-svg-ts';
             if (typeof DATAMatrix !== 'function') throw new Error('default export missing');
             const { width, height } = encodeToMatrix('Äiti ja isä');
             if (width !== 18 || height !== 18) throw new Error('unexpected size ' + width + 'x' + height);
+            const text = 'ä'.repeat(20);
+            if (encodeToMatrix(text, { encoding: 'iso-8859-1' }).width >= encodeToMatrix(text).width) throw new Error('Latin-1 not more compact');
+            const markup = toSvgString('Äiti ja isä');
+            if (!markup.startsWith('<svg viewBox=\"0 0 22 22\"')) throw new Error('unexpected markup ' + markup.slice(0, 40));
             try { encodeToMatrix(''); throw new Error('expected EMPTY_MESSAGE'); }
             catch (e) { if (!(e instanceof DataMatrixError)) throw e; }
-            console.log('ok', width + 'x' + height);
+            console.log('ok', width + 'x' + height, markup.length + ' chars of SVG');
           "
