@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [1.0.3] - Unreleased
+## [1.0.3] - 2026-09-28
 
 Bug fixes found by decoding the output with an independent reader (ZXing). The
 first and third bugs are inherited from the original
@@ -80,7 +80,7 @@ If you have printed codes with such content, regenerate them.
   (`DATAMatrix`, `encodeToMatrix`, `matrixToSvg`) and support for all SVG color
   values.
 
-[1.0.3]: https://github.com/damischa1/datamatrix-svg-ts/compare/0f6f4bd...HEAD
+[1.0.3]: https://github.com/damischa1/datamatrix-svg-ts/compare/0f6f4bd...v1.0.3
 [1.0.2]: https://github.com/damischa1/datamatrix-svg-ts/commit/0f6f4bd
 [1.0.1]: https://github.com/damischa1/datamatrix-svg-ts/commit/9a96b58
 [1.0.0]: https://github.com/damischa1/datamatrix-svg-ts/commit/1c49e54
