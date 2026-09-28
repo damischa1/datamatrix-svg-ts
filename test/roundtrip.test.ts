@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DataMatrixError, encodeToMatrix } from '../src/index.js';
-import { decode, utf8 } from './helpers/decode.js';
+import { decode, latin1, read, utf8 } from './helpers/decode.js';
 
 /** Deterministic PRNG so failures are reproducible. */
 function random(seed: number) {
@@ -140,5 +140,63 @@ describe('round trip: symbol size selection', () => {
   it('accepts 3116 digits (maximum capacity) and rejects 3117', async () => {
     await expectRoundTrip('7'.repeat(3116));
     expect(() => encodeToMatrix('7'.repeat(3117))).toThrow(DataMatrixError);
+  });
+});
+
+describe('round trip: encoding and ECI', () => {
+  const FINNISH = 'Äiti ja isä söivät jäätelöä – Åbo';
+  const LATIN1 = FINNISH.replace('–', '-');
+
+  it('encodes ISO-8859-1 as one byte per character', async () => {
+    const result = encodeToMatrix(LATIN1, { encoding: 'iso-8859-1' });
+    expect(await decode(result)).toEqual(latin1(LATIN1));
+    expect(result.width).toBeLessThan(encodeToMatrix(LATIN1).width);
+  });
+
+  it('rejects characters outside ISO-8859-1', () => {
+    try {
+      encodeToMatrix(FINNISH, { encoding: 'iso-8859-1' });
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(DataMatrixError);
+      expect((e as DataMatrixError).code).toBe('UNSUPPORTED_CHARACTER');
+      expect((e as DataMatrixError).message).toContain('U+2013');
+    }
+  });
+
+  for (const [encoding, eciNumber, text] of [
+    ['utf-8', 26, FINNISH],
+    ['iso-8859-1', 3, LATIN1],
+  ] as const) {
+    it(`marks ${encoding} with ECI ${eciNumber} and decodes to the original text`, async () => {
+      const barcode = await read(encodeToMatrix(text, { encoding, eci: true }));
+      expect(barcode?.hasECI).toBe(true);
+      expect(barcode?.text).toBe(text);
+    });
+  }
+
+  it('keeps Base256 randomization aligned after the ECI designator', async () => {
+    // Two-byte characters force Base256 mode, whose codewords depend on their position
+    for (const n of [1, 10, 124, 125, 126, 500, 776]) {
+      const text = 'ä'.repeat(n);
+      const barcode = await read(encodeToMatrix(text, { eci: true }));
+      expect(barcode?.text).toBe(text);
+    }
+  });
+
+  it('round-trips random text in every mode with ECI', async () => {
+    const rnd = random(2024);
+    for (const [name, charset] of Object.entries(CHARSETS)) {
+      for (let length = 1; length <= 30; length += 3) {
+        const text = randomString(charset, length, rnd);
+        const barcode = await read(encodeToMatrix(text, { eci: true }));
+        expect(barcode?.bytes, `${name}: ${JSON.stringify(text)}`).toEqual(utf8(text));
+      }
+    }
+  });
+
+  it('rejects an unknown encoding', () => {
+    // @ts-expect-error -- invalid value from untyped callers
+    expect(() => encodeToMatrix('x', { encoding: 'latin-9' })).toThrow(TypeError);
   });
 });

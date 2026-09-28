@@ -33,15 +33,15 @@
  */
 
 import { encodeMessage } from './encoder.js';
-import type { DataMatrixResult } from './encoder.js';
+import type { DataMatrixResult, EncodeOptions } from './encoder.js';
 import { matrixToSvg } from './svg-renderer.js';
-import type { Palette } from './svg-renderer.js';
+import type { SvgOptions } from './svg-renderer.js';
 
 // ============================================================================
 // Re-export Types
 // ============================================================================
 
-export type { DataMatrixResult } from './encoder.js';
+export type { DataMatrixResult, EncodeOptions, MessageEncoding } from './encoder.js';
 export { DataMatrixError, type DataMatrixErrorCode } from './encoder.js';
 export type { NamedColor, Palette, SvgColor, SvgOptions } from './svg-renderer.js';
 
@@ -50,33 +50,12 @@ export type { NamedColor, Palette, SvgColor, SvgOptions } from './svg-renderer.j
 // ============================================================================
 
 /**
- * Configuration options for DataMatrix generation
+ * Configuration options for DataMatrix generation: the message plus
+ * encoding options ({@link EncodeOptions}) and SVG options ({@link SvgOptions})
  */
-export interface DataMatrixOptions {
+export interface DataMatrixOptions extends EncodeOptions, SvgOptions {
   /** The message to encode */
   message: string;
-  /**
-   * Output height in pixels; the width follows the symbol's aspect ratio, so a
-   * rectangular symbol is wider than this. Default: 256
-   */
-  dimension?: number;
-  /**
-   * Prefer a rectangular symbol (8x18 ... 16x48). If the data does not fit in
-   * the largest rectangle (49 data codewords), a square symbol is used instead;
-   * check `width !== height` on the result if the shape matters. Default: false
-   */
-  rectangular?: boolean;
-  /**
-   * Quiet zone padding in modules. ISO/IEC 16022 requires at least 1; use 0 only
-   * if the surrounding layout provides the light margin. Default: 2
-   */
-  padding?: number;
-  /** Color palette for foreground and background */
-  palette?: Palette;
-  /** Use verbose SVG output. Default: false */
-  verbose?: boolean;
-  /** Allow empty message. Default: false */
-  allowEmptyMessage?: boolean;
 }
 
 // ============================================================================
@@ -94,22 +73,33 @@ export interface DataMatrixOptions {
  * // Get the raw matrix data
  * const result = encodeToMatrix('Hello World!');
  * console.log(result.width, result.height); // dimensions in modules
- * console.log(result.matrix[y][x]); // 1 = black, 0/undefined = white
+ * console.log(result.matrix[y][x]); // 1 = dark, 0 = light
  *
  * @example
- * // For rectangular symbols
- * const result = encodeToMatrix('ABC123', true);
+ * // Rectangular symbol, Latin-1 text with an ECI designator
+ * const result = encodeToMatrix('Äiti', { rectangular: true, encoding: 'iso-8859-1', eci: true });
  *
  * @param message - The text message to encode
- * @param useRectangular - Prefer a rectangular symbol; falls back to square if the data
- *   does not fit in the largest rectangle (default: false)
- * @param allowEmptyMessage - Allow empty message without throwing error (default: false)
+ * @param options - Encoding options
  * @returns DataMatrixResult containing the pixel matrix and dimensions
  * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
  * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When the message does not fit in the largest (144x144) symbol
+ * @throws {DataMatrixError} code='UNSUPPORTED_CHARACTER' - When a character is outside the chosen encoding
  */
-export function encodeToMatrix(message: string, useRectangular?: boolean, allowEmptyMessage?: boolean): DataMatrixResult {
-  return encodeMessage(message, useRectangular, allowEmptyMessage);
+export function encodeToMatrix(message: string, options?: EncodeOptions): DataMatrixResult;
+/**
+ * @deprecated Pass an options object: `encodeToMatrix(message, { rectangular, allowEmptyMessage })`
+ */
+export function encodeToMatrix(message: string, useRectangular?: boolean, allowEmptyMessage?: boolean): DataMatrixResult;
+export function encodeToMatrix(
+  message: string,
+  optionsOrRectangular?: EncodeOptions | boolean,
+  allowEmptyMessage?: boolean
+): DataMatrixResult {
+  const options: EncodeOptions = typeof optionsOrRectangular === 'object' && optionsOrRectangular !== null
+    ? optionsOrRectangular
+    : { rectangular: optionsOrRectangular, allowEmptyMessage };
+  return encodeMessage(message, options);
 }
 
 // Re-export matrixToSvg directly from svg-renderer
@@ -140,13 +130,19 @@ export { matrixToSvg };
  * @returns SVG element containing the DataMatrix barcode
  * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
  * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When the message does not fit in the largest (144x144) symbol
+ * @throws {DataMatrixError} code='UNSUPPORTED_CHARACTER' - When a character is outside the chosen encoding
  */
 export function DATAMatrix(options: DataMatrixOptions | string): SVGSVGElement {
   // Parse options
   const opts: DataMatrixOptions = ('string' == typeof options) ? { message: options } : options || {};
   
   // Generate the barcode matrix
-  const matrixResult = encodeToMatrix(opts.message || '', opts.rectangular, opts.allowEmptyMessage);
+  const matrixResult = encodeMessage(opts.message || '', {
+    rectangular: opts.rectangular,
+    allowEmptyMessage: opts.allowEmptyMessage,
+    encoding: opts.encoding,
+    eci: opts.eci
+  });
   
   // Convert to SVG with the same options
   return matrixToSvg(matrixResult, {

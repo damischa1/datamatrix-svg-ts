@@ -16,13 +16,15 @@
  * Error codes for DataMatrix validation errors.
  * These represent expected, recoverable error conditions.
  */
-export type DataMatrixErrorCode = 'EMPTY_MESSAGE' | 'MESSAGE_TOO_LONG';
+export type DataMatrixErrorCode = 'EMPTY_MESSAGE' | 'MESSAGE_TOO_LONG' | 'UNSUPPORTED_CHARACTER';
 
 /**
  * Custom error class for DataMatrix validation errors.
  * 
  * This error is thrown for expected, recoverable conditions:
  * - EMPTY_MESSAGE: The input message is empty (and allowEmptyMessage is false)
+ * - UNSUPPORTED_CHARACTER: The message has a character outside the chosen
+ *   `encoding` (only with `encoding: 'iso-8859-1'`)
  * - MESSAGE_TOO_LONG: The encoded message exceeds DataMatrix capacity (at most
  *   3116 digits, about 2300 alphanumeric characters or 1555 bytes of UTF-8/binary data)
  * 
@@ -75,6 +77,44 @@ export interface DataMatrixResult {
   /** Height of the barcode in modules (including finder pattern) */
   readonly height: number;
 }
+
+/**
+ * Byte encoding for the message text.
+ * - `'utf-8'`: any text; non-ASCII characters take 2-4 bytes
+ * - `'iso-8859-1'`: Latin-1 (U+0000-U+00FF, e.g. ä, ö, å, é, ü), one byte per
+ *   character; the default character set of the DataMatrix standard, so readers
+ *   without UTF-8 detection show it correctly
+ */
+export type MessageEncoding = 'utf-8' | 'iso-8859-1';
+
+/**
+ * Options for encoding a message into a module matrix
+ */
+export interface EncodeOptions {
+  /**
+   * Prefer a rectangular symbol (8x18 ... 16x48). If the data does not fit in
+   * the largest rectangle (49 data codewords), a square symbol is used instead.
+   * Default: false
+   */
+  rectangular?: boolean;
+  /** Allow an empty message without throwing. Default: false */
+  allowEmptyMessage?: boolean;
+  /** Byte encoding of the text. Default: 'utf-8' */
+  encoding?: MessageEncoding;
+  /**
+   * Start the symbol with an ECI designator naming the encoding (ECI 26 for
+   * UTF-8, ECI 3 for ISO-8859-1) so ECI-aware readers decode the text without
+   * guessing. Costs 2 codewords. Readers without ECI support may show the
+   * designator as text. Default: false
+   */
+  eci?: boolean;
+}
+
+/** ECI assignment numbers for the supported encodings */
+const ECI_NUMBER: Record<MessageEncoding, number> = {
+  'iso-8859-1': 3,
+  'utf-8': 26,
+};
 
 /**
  * Internal symbol size calculation result
@@ -227,36 +267,36 @@ function encodeAscii(text: string): number[] {
 // ============================================================================
 
 /**
+ * 255-state randomizing algorithm for Base 256 codewords
+ * @param value - Byte value
+ * @param position - 1-based position of the codeword in the data stream
+ */
+function randomize255(value: number, position: number): number {
+  return (value + ((149 * position) % 255) + 1) & 255;
+}
+
+/**
  * Encodes text using Base 256 encoding mode
  * Base 256 mode is efficient for binary/byte data
- * @param text - Input text to encode
+ * @param text - Input text to encode (one char per byte)
+ * @param offset - Number of codewords before this segment (e.g. an ECI designator);
+ *   randomization depends on the absolute codeword position
  * @returns Array of codewords
  */
-function encodeBase256(text: string): number[] {
+function encodeBase256(text: string, offset: number): number[] {
   const textLength = text.length;
-  
-  // Build header: mode switch + length encoding
-  const header: number[] = [231]; // Switch to Base 256 mode
-  
-  // Length encoding with 255-state randomizing algorithm.
+
   // Lengths 1-249 use a single length byte; 250+ need two bytes
   // (floor(length / 250) + 249, length % 250). A single byte of 0 would
   // mean "data continues to the end of the symbol", so 250 must not use it.
-  if (textLength >= 250) {
-    // High byte, pre-randomized for position 2: (249 + n) + 44 ≡ 37 + n (mod 256)
-    header.push((37 + Math.floor(textLength / 250)) & 255);
-  }
-  // Low byte (always present) - position-dependent randomization
-  const lowBytePosition = header.length + 1;
-  header.push((textLength % 250 + 149 * lowBytePosition % 255 + 1) & 255);
+  const lengthBytes = textLength >= 250
+    ? [Math.floor(textLength / 250) + 249, textLength % 250]
+    : [textLength];
 
-  // Encode each byte with 255-state randomizing algorithm
-  const startPosition = header.length + 1;
-  const encodedBytes = Array.from(text, (char, i) => 
-    (char.charCodeAt(0) + 149 * (startPosition + i) % 255 + 1) & 255
-  );
+  const fieldBytes = [...lengthBytes, ...Array.from(text, (char) => char.charCodeAt(0))];
 
-  return [...header, ...encodedBytes];
+  // The latch (231) is at position offset + 1; the field follows it
+  return [231, ...fieldBytes.map((value, i) => randomize255(value, offset + 2 + i))];
 }
 
 // ============================================================================
@@ -396,10 +436,11 @@ function encodeTextMode(text: string, encodingTable: number[]): number[] {
 /**
  * Selects the most efficient encoding mode for the given text
  * Tries ASCII, C40, TEXT, X12, EDIFACT, and Base256 modes
- * @param text - UTF-8 encoded text to encode
+ * @param text - Text to encode (one char per byte)
+ * @param offset - Number of codewords before the data (e.g. an ECI designator)
  * @returns The most compact codeword array
  */
-function selectBestEncoding(text: string): number[] {
+function selectBestEncoding(text: string, offset: number): number[] {
   // Define all encoding strategies
   const encodingStrategies: Array<() => number[]> = [
     () => encodeAscii(text),
@@ -407,7 +448,7 @@ function selectBestEncoding(text: string): number[] {
     () => encodeTextMode(text, TEXT_TABLE),
     () => encodeTextMode(text, X12_TABLE),
     () => encodeEdifact(text),
-    () => encodeBase256(text)
+    () => encodeBase256(text, offset)
   ];
 
   // Find the shortest valid encoding
@@ -793,6 +834,52 @@ function placeDataCodewords(
 }
 
 // ============================================================================
+// Text to Bytes
+// ============================================================================
+
+/**
+ * Converts text into a byte string (one char per byte, 0-255) in the given encoding
+ * @throws {DataMatrixError} code='UNSUPPORTED_CHARACTER' - When a character is outside ISO-8859-1
+ * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When the bytes can never fit
+ */
+function textToBytes(text: string, encoding: MessageEncoding): string {
+  let bytes: ArrayLike<number>;
+
+  if (encoding === 'iso-8859-1') {
+    const latin1: number[] = [];
+    for (const char of text) {
+      const codePoint = char.codePointAt(0)!;
+      if (codePoint > 255) {
+        const hex = codePoint.toString(16).toUpperCase().padStart(4, '0');
+        throw new DataMatrixError(
+          'UNSUPPORTED_CHARACTER',
+          `Character "${char}" (U+${hex}) cannot be encoded in ISO-8859-1`
+        );
+      }
+      latin1.push(codePoint);
+    }
+    bytes = latin1;
+  } else {
+    bytes = new TextEncoder().encode(text);
+  }
+
+  // Nothing longer than MAX_ENCODABLE_BYTES can ever fit, so reject it before
+  // running every encoder over a potentially huge input.
+  if (bytes.length > MAX_ENCODABLE_BYTES) {
+    throw new DataMatrixError(
+      'MESSAGE_TOO_LONG',
+      `Message too long: ${bytes.length} bytes exceeds DataMatrix capacity`
+    );
+  }
+
+  // A loop instead of String.fromCharCode(...bytes), which overflows the call
+  // stack on large inputs.
+  let byteString = '';
+  for (let i = 0; i < bytes.length; i++) byteString += String.fromCharCode(bytes[i]!);
+  return byteString;
+}
+
+// ============================================================================
 // Main Encoding Function
 // ============================================================================
 
@@ -813,46 +900,39 @@ function placeDataCodewords(
  *
  * @example
  * // For rectangular symbols
- * const result = encodeMessage('ABC123', true);
+ * const result = encodeMessage('ABC123', { rectangular: true });
  *
  * @example
  * // Allow empty message (produces minimal DataMatrix)
- * const result = encodeMessage('', false, true);
+ * const result = encodeMessage('', { allowEmptyMessage: true });
  *
  * @param text - The message to encode
- * @param useRectangular - Prefer a rectangular symbol; falls back to square if the data
- *   does not fit in the largest rectangle (default: false)
- * @param allowEmptyMessage - Allow empty message without throwing error (default: false)
+ * @param options - Encoding options
  * @returns DataMatrixResult containing the pixel matrix and dimensions
  * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
  * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When the message does not fit in the largest (144x144) symbol
+ * @throws {DataMatrixError} code='UNSUPPORTED_CHARACTER' - When a character is outside the chosen encoding
  */
-export function encodeMessage(text: string, useRectangular?: boolean, allowEmptyMessage?: boolean): DataMatrixResult {
+export function encodeMessage(text: string, options: EncodeOptions = {}): DataMatrixResult {
+  const { rectangular: useRectangular, allowEmptyMessage, encoding = 'utf-8', eci = false } = options;
+
+  if (!Object.hasOwn(ECI_NUMBER, encoding)) {
+    throw new TypeError(`Unsupported encoding: ${String(encoding)}`);
+  }
+
   // Validate input
   if ((!text || text.length === 0) && !allowEmptyMessage) {
     throw new DataMatrixError('EMPTY_MESSAGE', 'Message cannot be empty');
   }
 
 
-  // Convert to UTF-8 bytes using TextEncoder
-  const utf8Bytes = new TextEncoder().encode(text);
+  const byteText = textToBytes(text || '', encoding);
 
-  // Nothing longer than MAX_ENCODABLE_BYTES can ever fit, so reject it before
-  // running every encoder over a potentially huge input.
-  if (utf8Bytes.length > MAX_ENCODABLE_BYTES) {
-    throw new DataMatrixError(
-      'MESSAGE_TOO_LONG',
-      `Message too long: ${utf8Bytes.length} bytes exceeds DataMatrix capacity`
-    );
-  }
-
-  // One char per byte (0-255). A loop instead of String.fromCharCode(...bytes),
-  // which overflows the call stack on large inputs.
-  let utf8Text = '';
-  for (const byte of utf8Bytes) utf8Text += String.fromCharCode(byte);
+  // ECI designator (241) + ECI number + 1, for numbers 0-126
+  const eciPrefix = eci ? [241, ECI_NUMBER[encoding] + 1] : [];
 
   // Step 1: Select best encoding mode
-  const encodedData = selectBestEncoding(utf8Text);
+  const encodedData = [...eciPrefix, ...selectBestEncoding(byteText, eciPrefix.length)];
 
   // Step 2: Calculate symbol size
   const symbolSize = calculateSymbolSize(encodedData.length, useRectangular);

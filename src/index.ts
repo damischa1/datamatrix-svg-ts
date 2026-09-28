@@ -12,6 +12,8 @@ export {
   matrixToSvg,
   type DataMatrixOptions,
   type DataMatrixResult,
+  type EncodeOptions,
+  type MessageEncoding,
   type SvgOptions,
   type Palette,
   type SvgColor,

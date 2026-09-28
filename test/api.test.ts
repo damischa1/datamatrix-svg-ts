@@ -126,6 +126,17 @@ describe('encodeToMatrix', () => {
     }
   });
 
+  it('accepts an options object and the older positional arguments', () => {
+    expect(encodeToMatrix('12345', { rectangular: true })).toEqual(encodeToMatrix('12345', true));
+    expect(encodeToMatrix('', { allowEmptyMessage: true })).toEqual(encodeToMatrix('', false, true));
+  });
+
+  it('passes encoding options through DATAMatrix', () => {
+    const plain = DATAMatrix('Äiti').outerHTML;
+    expect(DATAMatrix({ message: 'Äiti', encoding: 'iso-8859-1' }).outerHTML).not.toBe(plain);
+    expect(DATAMatrix({ message: 'Äiti', eci: true }).outerHTML).not.toBe(plain);
+  });
+
   it('works without a DOM', () => {
     const { document } = globalThis;
     // @ts-expect-error -- simulate a non-browser runtime

@@ -42,14 +42,21 @@ export function rasterize(result: DataMatrixResult, quietZone = 2, scale = 4) {
   return { data, width, height, colorSpace: 'srgb' as const };
 }
 
-/** Returns the decoded payload bytes, or null if no DataMatrix was found. */
-export async function decode(result: DataMatrixResult): Promise<Uint8Array | null> {
+/** Returns the decoded symbol, or null if no DataMatrix was found. */
+export async function read(result: DataMatrixResult) {
   await prepare();
   const [barcode] = await readBarcodes(rasterize(result), {
     formats: ['DataMatrix'],
     tryHarder: false,
   });
-  return barcode ? barcode.bytes : null;
+  return barcode ?? null;
+}
+
+/** Returns the decoded payload bytes (without ECI designators), or null. */
+export async function decode(result: DataMatrixResult): Promise<Uint8Array | null> {
+  return (await read(result))?.bytes ?? null;
 }
 
 export const utf8 = (text: string) => new TextEncoder().encode(text);
+
+export const latin1 = (text: string) => Uint8Array.from(text, (char) => char.charCodeAt(0));
