@@ -34,7 +34,7 @@
 
 import { encodeMessage } from './encoder.js';
 import type { DataMatrixResult, EncodeOptions } from './encoder.js';
-import { matrixToSvg } from './svg-renderer.js';
+import { matrixToSvg, matrixToSvgString } from './svg-renderer.js';
 import type { SvgOptions } from './svg-renderer.js';
 
 // ============================================================================
@@ -102,8 +102,23 @@ export function encodeToMatrix(
   return encodeMessage(message, options);
 }
 
-// Re-export matrixToSvg directly from svg-renderer
-export { matrixToSvg };
+// Re-export the renderers directly from svg-renderer
+export { matrixToSvg, matrixToSvgString };
+
+/** Normalizes DATAMatrix()/toSvgString() arguments */
+function toOptions(options: DataMatrixOptions | string): DataMatrixOptions {
+  return ('string' == typeof options) ? { message: options } : options || { message: '' };
+}
+
+/** Encodes the message of DATAMatrix()/toSvgString() options */
+function encodeOptions(opts: DataMatrixOptions): DataMatrixResult {
+  return encodeMessage(opts.message || '', {
+    rectangular: opts.rectangular,
+    allowEmptyMessage: opts.allowEmptyMessage,
+    encoding: opts.encoding,
+    eci: opts.eci
+  });
+}
 
 /**
  * Generates a DataMatrix 2D barcode as an SVG element (convenience function)
@@ -133,24 +148,31 @@ export { matrixToSvg };
  * @throws {DataMatrixError} code='UNSUPPORTED_CHARACTER' - When a character is outside the chosen encoding
  */
 export function DATAMatrix(options: DataMatrixOptions | string): SVGSVGElement {
-  // Parse options
-  const opts: DataMatrixOptions = ('string' == typeof options) ? { message: options } : options || {};
-  
-  // Generate the barcode matrix
-  const matrixResult = encodeMessage(opts.message || '', {
-    rectangular: opts.rectangular,
-    allowEmptyMessage: opts.allowEmptyMessage,
-    encoding: opts.encoding,
-    eci: opts.eci
-  });
-  
-  // Convert to SVG with the same options
-  return matrixToSvg(matrixResult, {
-    dimension: opts.dimension,
-    padding: opts.padding,
-    palette: opts.palette,
-    verbose: opts.verbose
-  });
+  const opts = toOptions(options);
+  return matrixToSvg(encodeOptions(opts), opts);
+}
+
+/**
+ * Generates a DataMatrix 2D barcode as SVG markup, without a DOM
+ *
+ * Same options and output as `DATAMatrix(...).outerHTML`, but works in any
+ * JavaScript runtime: server-side rendering, Node.js scripts, workers.
+ *
+ * @example
+ * // React without refs or effects
+ * <span dangerouslySetInnerHTML={{ __html: toSvgString({ message: code, padding: 1 }) }} />
+ *
+ * @example
+ * // Write a file in Node.js
+ * writeFileSync('code.svg', toSvgString('Hello World!'));
+ *
+ * @param options - Configuration options or just a string message
+ * @returns SVG markup
+ * @throws {DataMatrixError} Same as DATAMatrix()
+ */
+export function toSvgString(options: DataMatrixOptions | string): string {
+  const opts = toOptions(options);
+  return matrixToSvgString(encodeOptions(opts), opts);
 }
 
 export default DATAMatrix;

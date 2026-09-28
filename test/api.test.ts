@@ -7,6 +7,9 @@ import defaultExport, {
   DataMatrixError,
   encodeToMatrix,
   matrixToSvg,
+  matrixToSvgString,
+  toSvgString,
+  type DataMatrixOptions,
   type DataMatrixResult,
 } from '../src/index.js';
 
@@ -92,6 +95,68 @@ describe('matrixToSvg', () => {
     const svg = matrixToSvg(result);
     expect(svg.namespaceURI).toBe('http://www.w3.org/2000/svg');
     expect(svg.getAttribute('xmlns')).toBe('http://www.w3.org/2000/svg');
+  });
+});
+
+describe('toSvgString / matrixToSvgString', () => {
+  const variants: DataMatrixOptions[] = [
+    { message: 'Hello DataMatrix!' },
+    { message: 'Äiti ja isä', dimension: 100, padding: 0 },
+    { message: '12345', rectangular: true, padding: 1 },
+    { message: 'colors', palette: { foreground: 'currentColor', background: '#fff' } },
+    { message: 'verbose', verbose: true },
+    { message: 'Äiti', encoding: 'iso-8859-1', eci: true },
+  ];
+
+  for (const options of variants) {
+    it(`matches the DOM output: ${JSON.stringify(options)}`, () => {
+      expect(toSvgString(options)).toBe(DATAMatrix(options).outerHTML);
+      const result = encodeToMatrix(options.message, options);
+      expect(matrixToSvgString(result, options)).toBe(matrixToSvg(result, options).outerHTML);
+    });
+  }
+
+  it('accepts a plain string', () => {
+    expect(toSvgString('ABC')).toBe(DATAMatrix('ABC').outerHTML);
+  });
+
+  it('escapes attribute values', () => {
+    const markup = toSvgString({ message: 'x', palette: { foreground: 'url("#a&b")' } });
+    expect(markup).toContain('fill="url(&quot;#a&amp;b&quot;)"');
+  });
+
+  it('parses as SVG', () => {
+    const doc = new DOMParser().parseFromString(toSvgString('parse me'), 'image/svg+xml');
+    expect(doc.querySelector('parsererror')).toBeNull();
+    expect(doc.documentElement.tagName).toBe('svg');
+    expect(doc.documentElement.namespaceURI).toBe('http://www.w3.org/2000/svg');
+  });
+
+  it('throws the same errors as DATAMatrix', () => {
+    expect(() => toSvgString('')).toThrow(DataMatrixError);
+  });
+});
+
+describe('option validation', () => {
+  const result = encodeToMatrix('options');
+  const viewBox = (padding: number) => `0 0 ${result.width + 2 * padding} ${result.height + 2 * padding}`;
+
+  it('uses the default padding for negative or non-numeric values', () => {
+    for (const padding of [-3, NaN, Infinity]) {
+      expect(matrixToSvg(result, { padding }).getAttribute('viewBox')).toBe(viewBox(2));
+    }
+  });
+
+  it('uses the default dimension for zero, negative or non-numeric values', () => {
+    for (const dimension of [0, -100, NaN]) {
+      expect(matrixToSvg(result, { dimension }).getAttribute('height')).toBe('256');
+    }
+  });
+
+  it('accepts numeric strings from untyped callers', () => {
+    const svg = matrixToSvg(result, { padding: '1' as unknown as number, dimension: '64' as unknown as number });
+    expect(svg.getAttribute('viewBox')).toBe(viewBox(1));
+    expect(svg.getAttribute('height')).toBe('64');
   });
 });
 

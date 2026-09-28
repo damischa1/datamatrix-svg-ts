@@ -171,30 +171,6 @@ function resolveColor(color: string | undefined, defaultColor: string | null): s
 }
 
 // ============================================================================
-// SVG Element Creation
-// ============================================================================
-
-/**
- * Creates an SVG element with specified attributes
- * @typeParam T - The specific SVG element type
- * @param tagName - SVG element tag name
- * @param attributes - Key-value pairs for element attributes
- * @returns Created SVG element
- */
-function createSvgElement<T extends SVGElement = SVGElement>(
-  tagName: string, 
-  attributes?: Record<string, string | number>
-): T {
-  const element = document.createElementNS(SVG_NAMESPACE, tagName);
-
-  for (const attrName in attributes || {}) {
-    element.setAttribute(attrName, String(attributes![attrName]));
-  }
-
-  return element as T;
-}
-
-// ============================================================================
 // Path Generation
 // ============================================================================
 
@@ -245,79 +221,119 @@ function generatePathData(
 }
 
 // ============================================================================
-// SVG Component Creation
+// SVG Description
 // ============================================================================
 
-/**
- * Creates the root SVG element with proper attributes
- * 
- * @param svgWidth - Total SVG width including padding
- * @param svgHeight - Total SVG height including padding
- * @param pixelDimension - Output dimension in pixels
- * @param foregroundColor - Fill color for modules
- * @returns SVG root element
- */
-function createSvgRoot(
-  svgWidth: number,
-  svgHeight: number,
-  pixelDimension: number,
-  foregroundColor: string
-): SVGSVGElement {
-  return createSvgElement<SVGSVGElement>('svg', {
-    'viewBox': [0, 0, svgWidth, svgHeight].join(' '),
-    'width': pixelDimension / svgHeight * svgWidth | 0,
-    'height': pixelDimension,
-    'fill': foregroundColor,
-    'shape-rendering': 'crispEdges',
-    'xmlns': SVG_NAMESPACE,
-    'version': '1.1'
-  });
+/** Attributes of one SVG element, in output order */
+type Attributes = ReadonlyArray<readonly [name: string, value: string | number]>;
+
+/** Renderer-independent description of the barcode SVG */
+interface SvgDescription {
+  root: Attributes;
+  paths: Attributes[];
 }
 
 /**
- * Creates a background rectangle path element
- * 
- * @param svgWidth - Total SVG width
- * @param svgHeight - Total SVG height
- * @param backgroundColor - Background fill color
- * @returns SVG path element for background
+ * Describes the SVG for a matrix: the root element and its paths.
+ * Both the DOM and the string renderer are built from this, so their output matches.
  */
-function createBackgroundPath(svgWidth: number, svgHeight: number, backgroundColor: string): SVGPathElement {
-  return createSvgElement<SVGPathElement>('path', {
-    'fill': backgroundColor,
-    'd': 'M0,0v' + svgHeight + 'h' + svgWidth + 'V0H0Z'
-  });
+function describeSvg(matrixResult: DataMatrixResult, options?: SvgOptions): SvgDescription {
+  const opts = options || {};
+  const { matrix, width: matrixWidth, height: matrixHeight } = matrixResult;
+
+  // Parse options with defaults; negative or non-numeric values use the default
+  const palette = opts.palette || {};
+  const dimension = positiveNumber(opts.dimension, 256, false);
+  const padding = positiveNumber(opts.padding, 2, true);
+
+  // Resolve colors
+  const foregroundColor = resolveColor(palette.foreground, '#000')!;
+  const backgroundColor = resolveColor(palette.background, null);
+
+  // Calculate SVG dimensions
+  const svgWidth = matrixWidth + padding * 2;
+  const svgHeight = matrixHeight + padding * 2;
+
+  const root: Attributes = [
+    ['viewBox', [0, 0, svgWidth, svgHeight].join(' ')],
+    ['width', dimension / svgHeight * svgWidth | 0],
+    ['height', dimension],
+    ['fill', foregroundColor],
+    ['shape-rendering', 'crispEdges'],
+    ['xmlns', SVG_NAMESPACE],
+    ['version', '1.1']
+  ];
+
+  const paths: Attributes[] = [];
+
+  // Background, if specified
+  if (backgroundColor) {
+    paths.push([
+      ['fill', backgroundColor],
+      ['d', 'M0,0v' + svgHeight + 'h' + svgWidth + 'V0H0Z']
+    ]);
+  }
+
+  // Barcode, offset by the quiet zone
+  paths.push([
+    ['transform', 'matrix(' + [1, 0, 0, 1, padding, padding] + ')'],
+    ['d', generatePathData(matrix, matrixWidth, matrixHeight, !opts.verbose)]
+  ]);
+
+  return { root, paths };
 }
 
 /**
- * Creates the barcode path element with transformation
- * 
- * @param pathData - SVG path data string
- * @param padding - Padding offset for transform
- * @returns SVG path element for barcode
+ * Returns `value` if it is a finite number above zero (or zero, if allowed), else `fallback`
  */
-function createBarcodePath(pathData: string, padding: number): SVGPathElement {
-  const transformMatrix = [1, 0, 0, 1, padding, padding];
-  return createSvgElement<SVGPathElement>('path', {
-    'transform': 'matrix(' + transformMatrix + ')',
-    'd': pathData
-  });
+function positiveNumber(value: number | undefined, fallback: number, allowZero: boolean): number {
+  // Number() keeps numeric strings from untyped callers working
+  const number = value === undefined || value === null ? NaN : Number(value);
+  return Number.isFinite(number) && (number > 0 || (allowZero && number === 0)) ? number : fallback;
 }
 
 // ============================================================================
-// Main Rendering Function
+// Renderers
+// ============================================================================
+
+/** Creates an SVG element with the given attributes */
+function createSvgElement<T extends SVGElement>(tagName: string, attributes: Attributes): T {
+  const element = document.createElementNS(SVG_NAMESPACE, tagName);
+  for (const [name, value] of attributes) {
+    element.setAttribute(name, String(value));
+  }
+  return element as T;
+}
+
+/** Escapes a value for use in a double-quoted XML attribute */
+function escapeAttribute(value: string | number): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** Serializes an element with the given attributes and inner markup */
+function elementToString(tagName: string, attributes: Attributes, inner = ''): string {
+  const attrs = attributes.map(([name, value]) => ` ${name}="${escapeAttribute(value)}"`).join('');
+  return `<${tagName}${attrs}>${inner}</${tagName}>`;
+}
+
+// ============================================================================
+// Main Rendering Functions
 // ============================================================================
 
 /**
  * Converts a DataMatrix pixel matrix to an SVG element
  * 
- * This function takes the matrix result from encodeMessage() and renders it
- * as an SVG element with customizable styling options.
+ * This function takes the matrix result from encodeToMatrix() and renders it
+ * as an SVG element with customizable styling options. It needs a DOM
+ * (a global `document`); use matrixToSvgString() on a server.
  *
  * @example
  * // Basic usage
- * import { encodeMessage } from './encoder';
- * const matrixResult = encodeMessage('Hello World!');
+ * const matrixResult = encodeToMatrix('Hello World!');
  * const svg = matrixToSvg(matrixResult);
  *
  * @example
@@ -328,42 +344,34 @@ function createBarcodePath(pathData: string, padding: number): SVGPathElement {
  *   palette: { foreground: '#000000', background: '#ffffff' }
  * });
  *
- * @param matrixResult - The result from encodeMessage()
+ * @param matrixResult - The result from encodeToMatrix()
  * @param options - SVG rendering options
  * @returns SVG element containing the DataMatrix barcode
  */
 export function matrixToSvg(matrixResult: DataMatrixResult, options?: SvgOptions): SVGSVGElement {
-  const opts = options || {};
-  const { matrix, width: matrixWidth, height: matrixHeight } = matrixResult;
-  
-  // Parse options with defaults
-  const palette = opts.palette || {};
-  const dimension = Math.abs(opts.dimension!) || 256;
-  let padding = Math.abs(opts.padding!);
-  padding = (padding > -1) ? padding : 2;
-  const useOptimizedPath = !opts.verbose;
-
-  // Resolve colors
-  const foregroundColor = resolveColor(palette.foreground, '#000')!;
-  const backgroundColor = resolveColor(palette.background, null);
-
-  // Calculate SVG dimensions
-  const svgWidth = matrixWidth + padding * 2;
-  const svgHeight = matrixHeight + padding * 2;
-
-  // Generate path data from matrix
-  const pathData = generatePathData(matrix, matrixWidth, matrixHeight, useOptimizedPath);
-
-  // Create SVG structure
-  const svgElement = createSvgRoot(svgWidth, svgHeight, dimension, foregroundColor);
-
-  // Add background if specified
-  if (backgroundColor) {
-    svgElement.appendChild(createBackgroundPath(svgWidth, svgHeight, backgroundColor));
+  const { root, paths } = describeSvg(matrixResult, options);
+  const svgElement = createSvgElement<SVGSVGElement>('svg', root);
+  for (const path of paths) {
+    svgElement.appendChild(createSvgElement<SVGPathElement>('path', path));
   }
-
-  // Add barcode path
-  svgElement.appendChild(createBarcodePath(pathData, padding));
-
   return svgElement;
+}
+
+/**
+ * Converts a DataMatrix pixel matrix to SVG markup, without a DOM
+ *
+ * Produces the same markup as `matrixToSvg(...).outerHTML`. Works in any
+ * JavaScript runtime: server-side rendering, Node.js scripts, workers.
+ *
+ * @example
+ * const markup = matrixToSvgString(encodeToMatrix('Hello World!'), { dimension: 128 });
+ * // '<svg viewBox="0 0 18 18" width="128" ...><path ...></path></svg>'
+ *
+ * @param matrixResult - The result from encodeToMatrix()
+ * @param options - SVG rendering options
+ * @returns SVG markup
+ */
+export function matrixToSvgString(matrixResult: DataMatrixResult, options?: SvgOptions): string {
+  const { root, paths } = describeSvg(matrixResult, options);
+  return elementToString('svg', root, paths.map((path) => elementToString('path', path)).join(''));
 }

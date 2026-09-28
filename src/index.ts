@@ -10,6 +10,8 @@ export {
   DATAMatrix,
   encodeToMatrix,
   matrixToSvg,
+  matrixToSvgString,
+  toSvgString,
   type DataMatrixOptions,
   type DataMatrixResult,
   type EncodeOptions,
