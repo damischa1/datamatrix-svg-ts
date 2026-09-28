@@ -64,7 +64,11 @@ export class DataMatrixError extends Error {
  * Result of encoding a message into a DataMatrix matrix
  */
 export interface DataMatrixResult {
-  /** 2D array of pixel values (1 = black module, 0/undefined = white module) */
+  /**
+   * Module values by row and column, `matrix[y][x]`: 1 = dark, 0 = light.
+   * Every row has exactly `width` entries (before 1.1.0 rows could be sparse,
+   * with `undefined` for light modules).
+   */
   readonly matrix: readonly (readonly number[])[];
   /** Width of the barcode in modules (including finder pattern) */
   readonly width: number;
@@ -829,16 +833,6 @@ export function encodeMessage(text: string, useRectangular?: boolean, allowEmpty
     throw new DataMatrixError('EMPTY_MESSAGE', 'Message cannot be empty');
   }
 
-  /** 2D matrix storing the barcode pattern (1 = black, 0/undefined = white) */
-  const matrix: number[][] = [];
-
-  /**
-   * Sets a bit (black module) at the specified position in the matrix
-   */
-  const setBit = function(x: number, y: number): void {
-    matrix[y] = matrix[y] || [];
-    matrix[y][x] = 1;
-  };
 
   // Convert to UTF-8 bytes using TextEncoder
   const utf8Bytes = new TextEncoder().encode(text);
@@ -872,15 +866,23 @@ export function encodeMessage(text: string, useRectangular?: boolean, allowEmpty
   // Step 4: Calculate Reed-Solomon error correction
   calculateReedSolomon(encodedData, symbolSize.rsCheckwords, symbolSize.numBlocks);
 
+  // Final dimensions including region separators
+  const matrixWidth = symbolSize.symbolWidth + 2 * symbolSize.numColRegions;
+  const matrixHeight = symbolSize.symbolHeight + 2 * symbolSize.numRowRegions;
+
+  /** Module matrix, all light (0) until set */
+  const matrix: number[][] = Array.from({ length: matrixHeight }, () => new Array<number>(matrixWidth).fill(0));
+
+  /** Sets a dark module at the specified position */
+  const setBit = function(x: number, y: number): void {
+    matrix[y]![x] = 1;
+  };
+
   // Step 5: Draw finder pattern
   drawFinderPattern(setBit, symbolSize);
 
   // Step 6: Place data codewords
   placeDataCodewords(setBit, encodedData, symbolSize);
-
-  // Calculate final dimensions including region separators
-  const matrixWidth = symbolSize.symbolWidth + 2 * symbolSize.numColRegions;
-  const matrixHeight = symbolSize.symbolHeight + 2 * symbolSize.numRowRegions;
 
   return { matrix, width: matrixWidth, height: matrixHeight };
 }

@@ -106,6 +106,26 @@ describe('encodeToMatrix', () => {
     expect([result.width, result.height]).toEqual([18, 8]);
   });
 
+  it('returns a dense 0/1 matrix of exactly width x height in every symbol size', () => {
+    // 2n digits need n codewords; these lengths hit every square and rectangular size
+    const squareCapacities = [3, 5, 8, 12, 18, 22, 30, 36, 44, 62, 86, 114, 144, 174, 204,
+      280, 368, 456, 576, 696, 816, 1050, 1304, 1558];
+    const rectangularCapacities = [5, 10, 16, 22, 32, 49];
+    const results = [
+      ...squareCapacities.map((n) => encodeToMatrix('1'.repeat(2 * n))),
+      ...rectangularCapacities.map((n) => encodeToMatrix('1'.repeat(2 * n), true)),
+    ];
+    expect(new Set(results.map((r) => `${r.width}x${r.height}`)).size).toBe(30);
+
+    for (const { matrix, width, height } of results) {
+      expect(matrix).toHaveLength(height);
+      for (const row of matrix) {
+        expect(row).toHaveLength(width);
+        expect(row.every((v) => v === 0 || v === 1)).toBe(true);
+      }
+    }
+  });
+
   it('works without a DOM', () => {
     const { document } = globalThis;
     // @ts-expect-error -- simulate a non-browser runtime
