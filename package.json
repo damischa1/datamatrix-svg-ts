@@ -4,7 +4,6 @@
   "description": "DataMatrix ECC 200 barcode generator as SVG - TypeScript implementation",
   "type": "module",
   "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -29,8 +28,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:package": "publint --strict && attw --pack . --profile esm-only",
-    "check": "npm run typecheck && npm test && npm run build && npm run check:package",
+    "check:package": "npm run build && publint --strict && attw --pack . --profile esm-only",
+    "check": "npm run typecheck && npm test && npm run check:package",
     "prepack": "npm run clean && npm run build",
     "prepublishOnly": "npm run typecheck && npm test"
   },
