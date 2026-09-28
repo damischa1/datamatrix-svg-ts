@@ -226,9 +226,12 @@ function encodeBase256(text: string): number[] {
   // Build header: mode switch + length encoding
   const header: number[] = [231]; // Switch to Base 256 mode
   
-  // Length encoding with 255-state randomizing algorithm
-  if (textLength > 250) {
-    // High byte for lengths > 250
+  // Length encoding with 255-state randomizing algorithm.
+  // Lengths 1-249 use a single length byte; 250+ need two bytes
+  // (floor(length / 250) + 249, length % 250). A single byte of 0 would
+  // mean "data continues to the end of the symbol", so 250 must not use it.
+  if (textLength >= 250) {
+    // High byte, pre-randomized for position 2: (249 + n) + 44 ≡ 37 + n (mod 256)
     header.push((37 + Math.floor(textLength / 250)) & 255);
   }
   // Low byte (always present) - position-dependent randomization
