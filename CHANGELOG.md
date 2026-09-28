@@ -4,6 +4,66 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - Unreleased
+
+New features for server-side rendering and scanner compatibility, plus a few
+fixes. Existing code keeps working, and default output is unchanged: the same
+message produces the same symbol and the same SVG as in 1.0.3.
+
+### Added
+
+- **`toSvgString()` and `matrixToSvgString()`** return SVG markup without a DOM.
+  They take the same options as `DATAMatrix()` / `matrixToSvg()`, and the markup
+  equals their `outerHTML`. Use them for server-side rendering, Node.js scripts
+  and workers, or in React without a ref and effect (see the README).
+- **`encoding: 'iso-8859-1'`** encodes Latin-1 text (ä, ö, å, é, ...) with one byte
+  per character. ISO-8859-1 is the DataMatrix default, so hardware scanners that
+  do not detect UTF-8 read it correctly, and the symbol is smaller: 20 × `ä` needs
+  20×20 modules instead of 26×26. Characters outside Latin-1 throw
+  `DataMatrixError` with the new code `UNSUPPORTED_CHARACTER`.
+- **`eci: true`** starts the symbol with an ECI designator naming the encoding
+  (ECI 26 for UTF-8, ECI 3 for ISO-8859-1), so ECI-aware readers decode the text
+  without guessing.
+- **`encodeToMatrix(message, options)`** takes an options object
+  (`rectangular`, `allowEmptyMessage`, `encoding`, `eci`). The positional form
+  `encodeToMatrix(message, rectangular, allowEmptyMessage)` still works and is
+  marked deprecated.
+- `DATAMatrix()` options accept `encoding` and `eci`. New exported types:
+  `EncodeOptions` and `MessageEncoding`. `DataMatrixOptions` now extends
+  `EncodeOptions` and `SvgOptions`.
+- Colors: hex with alpha (`#rgba`, `#rrggbbaa`) and `hwb()`, `lab()`, `lch()`,
+  `oklab()`, `oklch()` and `color()`, plus the named color `rebeccapurple`.
+
+### Changed
+
+- **The module matrix is dense.** Every row of `encodeToMatrix().matrix` has
+  exactly `width` entries of `0` or `1`. Before, light modules could be missing
+  (`undefined`) and row lengths varied. Truthiness checks behave the same.
+- Invalid `padding` (negative or not a number) and `dimension` (zero, negative
+  or not a number) now use the defaults (2 and 256). Before, negative values
+  were silently made positive. Numeric strings still work.
+- `DataMatrixErrorCode` has a new member, `UNSUPPORTED_CHARACTER`. It is thrown
+  only with `encoding: 'iso-8859-1'`. An exhaustive `switch` over the codes with
+  a `never` check needs a new case.
+
+### Fixed
+
+- Hex colors with alpha were replaced with black, although the `SvgColor` type
+  allowed them.
+- Colors are trimmed before they are validated. Before, `' #123456 '` fell back
+  to black, while a named color with spaces around it passed through untrimmed.
+
+### Internal
+
+- Round-trip tests decode Latin-1 and ECI symbols with ZXing, including Base256
+  data after the ECI designator (its randomization depends on the codeword
+  position).
+- Tests check that `toSvgString()` matches the DOM output for every option
+  combination, that the renderers work without a DOM, that the matrix is dense
+  in all 30 symbol sizes, and cover color and option validation.
+- The CI compatibility job also exercises `toSvgString()` and Latin-1 on
+  Node.js 18 and 20.
+
 ## [1.0.3] - 2026-09-28
 
 Bug fixes found by decoding the output with an independent reader (ZXing). The
@@ -80,6 +140,7 @@ If you have printed codes with such content, regenerate them.
   (`DATAMatrix`, `encodeToMatrix`, `matrixToSvg`) and support for all SVG color
   values.
 
+[1.1.0]: https://github.com/damischa1/datamatrix-svg-ts/compare/v1.0.3...HEAD
 [1.0.3]: https://github.com/damischa1/datamatrix-svg-ts/compare/0f6f4bd...v1.0.3
 [1.0.2]: https://github.com/damischa1/datamatrix-svg-ts/commit/0f6f4bd
 [1.0.1]: https://github.com/damischa1/datamatrix-svg-ts/commit/9a96b58
