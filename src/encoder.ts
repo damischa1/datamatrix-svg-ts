@@ -23,7 +23,8 @@ export type DataMatrixErrorCode = 'EMPTY_MESSAGE' | 'MESSAGE_TOO_LONG';
  * 
  * This error is thrown for expected, recoverable conditions:
  * - EMPTY_MESSAGE: The input message is empty (and allowEmptyMessage is false)
- * - MESSAGE_TOO_LONG: The encoded message exceeds DataMatrix capacity (max ~1556 bytes)
+ * - MESSAGE_TOO_LONG: The encoded message exceeds DataMatrix capacity (at most
+ *   3116 digits, about 2300 alphanumeric characters or 1555 bytes of UTF-8/binary data)
  * 
  * Other errors (programming bugs) will throw standard Error.
  * 
@@ -123,9 +124,9 @@ const TEXT_TABLE = [
   64, 1, 43,
   90, 2, 64,  // Uppercase in Set 2
   95, 1, 69,
-  96, 2, 96,  // Backtick is value 0 in Set 3
+  96, 2, 96,  // Backtick is value 0 in Set 2 (Shift 3)
   122, 9, 83, // Lowercase a-z in basic set
-  127, 2, 96, // {|}~DEL in Set 3
+  127, 2, 96, // {|}~DEL in Set 2 (Shift 3)
   255, 1, 0
 ];
 
@@ -440,7 +441,7 @@ function calculateSymbolSize(encodedLength: number, useRectangular?: boolean): S
       const nextWidth = RECTANGULAR_SIZES[++symbolIndex];
       if (nextWidth === undefined) return null; // No suitable size found
       symbolWidth = nextWidth;
-      symbolHeight = 6 + (symbolIndex & 12); // Heights: 6, 6, 6, 8, 8, 8...
+      symbolHeight = 6 + (symbolIndex & 12); // Data region heights: 6, 6, 10, 10, 14, 14
       totalCodewords = symbolWidth * symbolHeight / 8;
     } while (totalCodewords - RECTANGULAR_SIZES[++symbolIndex]! < encodedLength);
 
@@ -815,11 +816,12 @@ function placeDataCodewords(
  * const result = encodeMessage('', false, true);
  *
  * @param text - The message to encode
- * @param useRectangular - Use rectangular format instead of square (default: false)
+ * @param useRectangular - Prefer a rectangular symbol; falls back to square if the data
+ *   does not fit in the largest rectangle (default: false)
  * @param allowEmptyMessage - Allow empty message without throwing error (default: false)
  * @returns DataMatrixResult containing the pixel matrix and dimensions
- * @throws {Error} "Message cannot be empty" - When message is empty and allowEmptyMessage is false
- * @throws {Error} "Message too long: encoded length X exceeds DataMatrix capacity" - When encoded message exceeds maximum capacity (~1556 bytes for largest symbol)
+ * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
+ * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When the message does not fit in the largest (144x144) symbol
  */
 export function encodeMessage(text: string, useRectangular?: boolean, allowEmptyMessage?: boolean): DataMatrixResult {
   // Validate input

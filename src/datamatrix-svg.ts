@@ -6,8 +6,7 @@
  * 
  * @packageDocumentation
  * @module datamatrix-svg-ts
- * @version 1.0.0
- * @license ISC
+ * @license MIT
  * 
  * @example
  * // Simple usage with just a message
@@ -56,11 +55,21 @@ export type { NamedColor, Palette, SvgColor, SvgOptions } from './svg-renderer.j
 export interface DataMatrixOptions {
   /** The message to encode */
   message: string;
-  /** Output height in pixels. Default: 256 */
+  /**
+   * Output height in pixels; the width follows the symbol's aspect ratio, so a
+   * rectangular symbol is wider than this. Default: 256
+   */
   dimension?: number;
-  /** Use rectangular format instead of square. Default: false */
+  /**
+   * Prefer a rectangular symbol (8x18 ... 16x48). If the data does not fit in
+   * the largest rectangle (49 data codewords), a square symbol is used instead;
+   * check `width !== height` on the result if the shape matters. Default: false
+   */
   rectangular?: boolean;
-  /** Quiet zone padding in modules. Default: 2 */
+  /**
+   * Quiet zone padding in modules. ISO/IEC 16022 requires at least 1; use 0 only
+   * if the surrounding layout provides the light margin. Default: 2
+   */
   padding?: number;
   /** Color palette for foreground and background */
   palette?: Palette;
@@ -92,11 +101,12 @@ export interface DataMatrixOptions {
  * const result = encodeToMatrix('ABC123', true);
  *
  * @param message - The text message to encode
- * @param useRectangular - Use rectangular format instead of square (default: false)
+ * @param useRectangular - Prefer a rectangular symbol; falls back to square if the data
+ *   does not fit in the largest rectangle (default: false)
  * @param allowEmptyMessage - Allow empty message without throwing error (default: false)
  * @returns DataMatrixResult containing the pixel matrix and dimensions
  * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
- * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When encoded message exceeds DataMatrix capacity (~1556 bytes max)
+ * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When the message does not fit in the largest (144x144) symbol
  */
 export function encodeToMatrix(message: string, useRectangular?: boolean, allowEmptyMessage?: boolean): DataMatrixResult {
   return encodeMessage(message, useRectangular, allowEmptyMessage);
@@ -129,7 +139,7 @@ export { matrixToSvg };
  * @param options - Configuration options or just a string message
  * @returns SVG element containing the DataMatrix barcode
  * @throws {DataMatrixError} code='EMPTY_MESSAGE' - When message is empty and allowEmptyMessage is false
- * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When encoded message exceeds DataMatrix capacity (~1556 bytes max)
+ * @throws {DataMatrixError} code='MESSAGE_TOO_LONG' - When the message does not fit in the largest (144x144) symbol
  */
 export function DATAMatrix(options: DataMatrixOptions | string): SVGSVGElement {
   // Parse options

@@ -57,9 +57,12 @@ export interface Palette {
  * SVG rendering options
  */
 export interface SvgOptions {
-  /** Output height in pixels. Default: 256 */
+  /**
+   * Output height in pixels; the width follows the symbol's aspect ratio.
+   * Default: 256
+   */
   dimension?: number;
-  /** Quiet zone padding in modules. Default: 2 */
+  /** Quiet zone padding in modules (ISO/IEC 16022 requires at least 1). Default: 2 */
   padding?: number;
   /** Color palette for foreground and background */
   palette?: Palette;
