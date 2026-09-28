@@ -80,6 +80,8 @@ describe('round trip: random messages in every encoding mode', () => {
       '0106412345678905\x1d10ABC123',
       'Äiti ja isä',
       'line1\r\nline2',
+      'hello`world',
+      'select `name` from users',
       '550e8400-e29b-41d4-a716-446655440000',
     ]) {
       await expectRoundTrip(message);

@@ -1,6 +1,6 @@
 {
   "name": "datamatrix-svg-ts",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "DataMatrix ECC 200 barcode generator as SVG - TypeScript implementation",
   "type": "module",
   "main": "./dist/index.js",
