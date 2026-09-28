@@ -21,60 +21,69 @@ npm install datamatrix-svg-ts
 
 The package is ESM-only and has no dependencies. It runs in browsers and in Node.js 18+
 (`require()` works on Node.js 20.19+ / 22.12+, which can load ES modules).
-`encodeToMatrix()` needs no DOM; `DATAMatrix()` and `matrixToSvg()` create DOM nodes and
-need a global `document` (a browser, or e.g. jsdom on the server).
+
+| Function | Returns | Needs a DOM |
+|----------|---------|-------------|
+| `DATAMatrix()` | `SVGSVGElement` | yes |
+| `toSvgString()` | SVG markup (`string`) | no |
+| `encodeToMatrix()` | module matrix | no |
+| `matrixToSvg()` | `SVGSVGElement` | yes |
+| `matrixToSvgString()` | SVG markup (`string`) | no |
 
 ## Quick Start
 
 ```typescript
-import { DATAMatrix } from 'datamatrix-svg-ts';
+import { DATAMatrix, toSvgString } from 'datamatrix-svg-ts';
 
-// Simple usage - just pass a string
-const svg = DATAMatrix('Hello World!');
-document.body.appendChild(svg);
+// In the browser: an SVG element
+document.body.appendChild(DATAMatrix('Hello World!'));
+
+// Anywhere (server, Node.js, workers): SVG markup
+const markup = toSvgString({ message: 'Hello World!', dimension: 128 });
 ```
 
 ## Usage in React
+
+`toSvgString()` renders during render, so no ref or effect is needed and it works
+with server-side rendering:
+
+```tsx
+import { useMemo } from 'react';
+import { toSvgString, DataMatrixError } from 'datamatrix-svg-ts';
+
+function DataMatrixCode({ value, className }: { value: string; className?: string }) {
+  const markup = useMemo(() => {
+    if (!value) return '';
+    try {
+      return toSvgString({ message: value, palette: { foreground: 'currentColor' } });
+    } catch (e) {
+      if (e instanceof DataMatrixError) return ''; // too long etc.
+      throw e;
+    }
+  }, [value]);
+
+  // The SVG has a viewBox; size it with CSS, e.g. [&>svg]:size-full
+  return <span className={className} dangerouslySetInnerHTML={{ __html: markup }} />;
+}
+```
+
+The markup contains only the generated SVG; the message is encoded into path data and never
+inserted as text, so this is safe for any input.
+
+With the DOM API instead:
 
 ```tsx
 import { useEffect, useRef } from 'react';
 import { DATAMatrix } from 'datamatrix-svg-ts';
 
-// Simple component
 function DataMatrixCode({ message }: { message: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.innerHTML = '';
-      const svg = DATAMatrix(message);
-      containerRef.current.appendChild(svg);
-    }
+    ref.current?.replaceChildren(message ? DATAMatrix(message) : '');
   }, [message]);
 
-  return <div ref={containerRef} />;
-}
-
-// With custom colors
-function DataMatrixWithColors({ message }: { message: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.innerHTML = '';
-      const svg = DATAMatrix({
-        message,
-        dimension: 200,
-        palette: { 
-          foreground: 'currentColor',  // Inherits CSS color
-          background: '#f0f0f0' as const
-        }
-      });
-      containerRef.current.appendChild(svg);
-    }
-  }, [message]);
-
-  return <div ref={containerRef} style={{ color: 'navy' }} />;
+  return <div ref={ref} />;
 }
 ```
 
@@ -111,6 +120,10 @@ try {
 |------|-------------|
 | `EMPTY_MESSAGE` | Message is empty (and `allowEmptyMessage` is false) |
 | `MESSAGE_TOO_LONG` | Encoded message exceeds DataMatrix maximum capacity |
+| `UNSUPPORTED_CHARACTER` | Character outside the chosen `encoding` (`'iso-8859-1'` only) |
+
+Invalid option values are not errors: an unrecognized color, or a negative or
+non-numeric `dimension` / `padding`, falls back to the default.
 
 ### Allowing Empty Messages
 
@@ -125,58 +138,70 @@ const svg = DATAMatrix({ message: '', allowEmptyMessage: true });
 For more control, you can separate encoding from rendering:
 
 ```typescript
-import { encodeToMatrix, matrixToSvg } from 'datamatrix-svg-ts';
+import { encodeToMatrix, matrixToSvg, matrixToSvgString } from 'datamatrix-svg-ts';
 
 // Step 1: Encode message to matrix
-const matrixResult = encodeToMatrix('Hello World!');
+const result = encodeToMatrix('Hello World!', { rectangular: true });
 
 // Step 2: Render matrix to SVG
-const svg = matrixToSvg(matrixResult, {
+const svg = matrixToSvg(result, {
   dimension: 512,
   palette: { foreground: '#000', background: '#fff' }
 });
+const markup = matrixToSvgString(result, { dimension: 512 });
 
-// Or use the matrix data for custom rendering (Canvas, PNG, etc.)
-// matrixResult.matrix[y][x] === 1 means black module
+// Or use the matrix for custom rendering (canvas, PNG, PDF, ...):
+// result.matrix[y][x] is 1 (dark) or 0 (light); every row has result.width entries
 ```
 
 ## API
 
 ### `DATAMatrix(options | string): SVGSVGElement`
 
-Main function - generates a DataMatrix barcode as an SVG element.
+Generates a DataMatrix barcode as an SVG element.
 
-**Throws:** `DataMatrixError` if message is empty or too long.
+### `toSvgString(options | string): string`
 
-### `encodeToMatrix(message, rectangular?, allowEmptyMessage?): DataMatrixResult`
+Same as `DATAMatrix()`, but returns the markup (equal to `DATAMatrix(...).outerHTML`)
+and works without a DOM.
 
-Encodes a message into a pixel matrix (for custom rendering).
+### `encodeToMatrix(message, options?): DataMatrixResult`
 
-**Throws:** `DataMatrixError` if message is empty (unless `allowEmptyMessage` is true) or too long.
+Encodes a message into a module matrix: `{ matrix, width, height }`. Options:
+`rectangular`, `allowEmptyMessage`, `encoding`, `eci` (see the table below).
+The older form `encodeToMatrix(message, rectangular?, allowEmptyMessage?)` still works
+but is deprecated.
 
-### `matrixToSvg(matrixResult, options?): SVGSVGElement`
+### `matrixToSvg(result, options?): SVGSVGElement` / `matrixToSvgString(result, options?): string`
 
-Converts a matrix to an SVG element.
+Render a matrix as an SVG element or as markup. Options: `dimension`, `padding`,
+`palette`, `verbose`.
 
 ### `DataMatrixError`
 
 Custom error class for validation errors. Has `code` property (`DataMatrixErrorCode`) and `message`.
+All functions that encode throw it.
 
 ### Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `message` | `string` | `''` | The message to encode |
+| `rectangular` | `boolean` | `false` | Prefer a rectangular symbol, see below |
+| `encoding` | `'utf-8' \| 'iso-8859-1'` | `'utf-8'` | Byte encoding of the text, see [Non-ASCII text](#non-ascii-text) |
+| `eci` | `boolean` | `false` | Add an ECI designator naming the encoding |
+| `allowEmptyMessage` | `boolean` | `false` | Allow empty message without error |
 | `dimension` | `number` | `256` | Output **height** in pixels; the width follows the aspect ratio |
 | `padding` | `number` | `2` | Quiet zone in modules (the standard requires at least 1) |
 | `palette` | `Palette` | `{ foreground: '#000' }` | Colors; no background by default |
-| `rectangular` | `boolean` | `false` | Prefer a rectangular symbol, see below |
 | `verbose` | `boolean` | `false` | One rectangle per module instead of merged horizontal runs |
-| `allowEmptyMessage` | `boolean` | `false` | Allow empty message without error |
 
 ### Palette Colors
 
-Supports all SVG color values: `#hex`, `rgb()`, `hsl()`, named colors, `currentColor`, `url(#gradient)`, etc.
+Supports SVG/CSS color values: hex (`#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`), `rgb()`,
+`hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()`, named colors,
+`currentColor`, `transparent`, `none` and `url(#gradient)`. Unrecognized values fall back to
+the default.
 
 ### Rectangular symbols
 
@@ -186,7 +211,7 @@ rectangle (49 data codewords, e.g. 98 digits or about 70 uppercase characters), 
 **square symbol is used instead** without an error. Check the result if the shape matters:
 
 ```typescript
-const result = encodeToMatrix(message, true);
+const result = encodeToMatrix(message, { rectangular: true });
 if (result.width === result.height) {
   // Did not fit in a rectangle
 }
@@ -212,10 +237,24 @@ Longer messages throw `DataMatrixError` with code `MESSAGE_TOO_LONG`.
 
 ### Non-ASCII text
 
-Text is encoded as UTF-8 bytes without an ECI (character set) marker. Most modern readers
-(ZXing-based apps, phone cameras) detect UTF-8 automatically, but some hardware scanners
-default to ISO-8859-1 and show e.g. `Ã¤` for `ä`. Test with your scanners if the content
-is not plain ASCII.
+By default text is encoded as UTF-8 bytes without an ECI (character set) marker. Most modern
+readers (ZXing-based apps, phone cameras) detect UTF-8 automatically, but some hardware
+scanners assume ISO-8859-1, the standard's default, and show e.g. `Ã¤` for `ä`.
+
+Options, depending on your scanners:
+
+```typescript
+// Latin-1: one byte per character, read correctly by scanners that assume ISO-8859-1,
+// and more compact. Characters outside Latin-1 (€, –, emoji) throw UNSUPPORTED_CHARACTER.
+toSvgString({ message: 'Äiti ja isä', encoding: 'iso-8859-1' });
+
+// ECI: the symbol names its encoding (ECI 26 = UTF-8, ECI 3 = ISO-8859-1), so
+// ECI-aware readers need no guessing. Costs 2 codewords; readers without ECI
+// support may show the designator as text.
+toSvgString({ message: 'Hinta 12 €', eci: true });
+```
+
+Test with your scanners before printing labels with non-ASCII text.
 
 ## Development
 
