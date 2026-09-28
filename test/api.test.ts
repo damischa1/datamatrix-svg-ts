@@ -1,0 +1,156 @@
+/**
+ * Public API and SVG rendering behaviour.
+ */
+import { describe, expect, it } from 'vitest';
+import defaultExport, {
+  DATAMatrix,
+  DataMatrixError,
+  encodeToMatrix,
+  matrixToSvg,
+  type DataMatrixResult,
+} from '../src/index.js';
+
+/** Rebuilds the module matrix from the rectangles in an SVG path. */
+function modulesFromPath(d: string, width: number, height: number): number[][] {
+  const grid = Array.from({ length: height }, () => new Array<number>(width).fill(0));
+  for (const [, x, y, run] of d.matchAll(/M(\d+),(\d+)h(\d+)v1h-\d+v-1z/g)) {
+    for (let i = 0; i < Number(run); i++) grid[Number(y)]![Number(x) + i] = 1;
+  }
+  return grid;
+}
+
+function dense(result: DataMatrixResult): number[][] {
+  return Array.from({ length: result.height }, (_, y) =>
+    Array.from({ length: result.width }, (_, x) => (result.matrix[y]?.[x] ? 1 : 0))
+  );
+}
+
+const barcodePath = (svg: SVGSVGElement) => svg.querySelector('path[transform]')!;
+
+describe('entry point', () => {
+  it('exports DATAMatrix as the default export', () => {
+    expect(defaultExport).toBe(DATAMatrix);
+  });
+
+  it('accepts a plain string or an options object', () => {
+    expect(DATAMatrix('ABC').outerHTML).toBe(DATAMatrix({ message: 'ABC' }).outerHTML);
+  });
+});
+
+describe('matrixToSvg', () => {
+  const result = encodeToMatrix('Hello DataMatrix!');
+
+  it('draws exactly the modules of the matrix', () => {
+    const d = barcodePath(matrixToSvg(result)).getAttribute('d')!;
+    expect(modulesFromPath(d, result.width, result.height)).toEqual(dense(result));
+  });
+
+  it('draws the same modules in verbose mode', () => {
+    const d = barcodePath(matrixToSvg(result, { verbose: true })).getAttribute('d')!;
+    expect(modulesFromPath(d, result.width, result.height)).toEqual(dense(result));
+  });
+
+  it('adds the quiet zone to the viewBox and offsets the barcode', () => {
+    const svg = matrixToSvg(result, { padding: 3 });
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 ${result.width + 6} ${result.height + 6}`);
+    expect(barcodePath(svg).getAttribute('transform')).toBe('matrix(1,0,0,1,3,3)');
+  });
+
+  it('supports padding 0', () => {
+    const svg = matrixToSvg(result, { padding: 0 });
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 ${result.width} ${result.height}`);
+  });
+
+  it('defaults to 256 px height with a 2-module quiet zone', () => {
+    const svg = matrixToSvg(result);
+    expect(svg.getAttribute('height')).toBe('256');
+    expect(svg.getAttribute('width')).toBe('256');
+    expect(svg.getAttribute('viewBox')).toBe(`0 0 ${result.width + 4} ${result.height + 4}`);
+  });
+
+  it('uses dimension as the height; rectangular symbols get a proportional width', () => {
+    const rect = encodeToMatrix('12345', true); // 18 x 8 modules, 22 x 12 with quiet zone
+    const svg = matrixToSvg(rect, { dimension: 120 });
+    expect(svg.getAttribute('height')).toBe('120');
+    expect(svg.getAttribute('width')).toBe('220');
+  });
+
+  it('applies foreground and optional background colors', () => {
+    const plain = matrixToSvg(result);
+    expect(plain.getAttribute('fill')).toBe('#000');
+    expect(plain.querySelectorAll('path')).toHaveLength(1);
+
+    const colored = matrixToSvg(result, {
+      palette: { foreground: 'currentColor', background: '#fff' },
+    });
+    expect(colored.getAttribute('fill')).toBe('currentColor');
+    const [background] = colored.querySelectorAll('path');
+    expect(background!.getAttribute('fill')).toBe('#fff');
+  });
+
+  it('produces a standalone SVG document', () => {
+    const svg = matrixToSvg(result);
+    expect(svg.namespaceURI).toBe('http://www.w3.org/2000/svg');
+    expect(svg.getAttribute('xmlns')).toBe('http://www.w3.org/2000/svg');
+  });
+});
+
+describe('encodeToMatrix', () => {
+  it('returns the symbol size including the finder pattern', () => {
+    const result = encodeToMatrix('A');
+    expect([result.width, result.height]).toEqual([10, 10]);
+  });
+
+  it('uses a rectangular symbol when requested and the data fits', () => {
+    const result = encodeToMatrix('12345', true);
+    expect([result.width, result.height]).toEqual([18, 8]);
+  });
+
+  it('works without a DOM', () => {
+    const { document } = globalThis;
+    // @ts-expect-error -- simulate a non-browser runtime
+    delete globalThis.document;
+    try {
+      expect(encodeToMatrix('no DOM needed').width).toBeGreaterThan(0);
+    } finally {
+      globalThis.document = document;
+    }
+  });
+});
+
+describe('errors', () => {
+  const codeOf = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      expect(e).toBeInstanceOf(DataMatrixError);
+      expect(e).toBeInstanceOf(Error);
+      return (e as DataMatrixError).code;
+    }
+    throw new Error('expected a DataMatrixError');
+  };
+
+  it('rejects an empty message by default', () => {
+    expect(codeOf(() => DATAMatrix(''))).toBe('EMPTY_MESSAGE');
+    expect(codeOf(() => encodeToMatrix(''))).toBe('EMPTY_MESSAGE');
+  });
+
+  it('allows an empty message when asked to', () => {
+    expect(encodeToMatrix('', false, true).width).toBe(10);
+    expect(DATAMatrix({ message: '', allowEmptyMessage: true }).tagName).toBe('svg');
+  });
+
+  it('rejects a message that does not fit', () => {
+    expect(codeOf(() => DATAMatrix('A'.repeat(3000)))).toBe('MESSAGE_TOO_LONG');
+  });
+
+  it('rejects a huge message with MESSAGE_TOO_LONG, not a stack overflow', () => {
+    expect(codeOf(() => encodeToMatrix('x'.repeat(500_000)))).toBe('MESSAGE_TOO_LONG');
+  });
+
+  it('has a useful name and message', () => {
+    const error = new DataMatrixError('EMPTY_MESSAGE', 'Message cannot be empty');
+    expect(error.name).toBe('DataMatrixError');
+    expect(String(error)).toBe('DataMatrixError: Message cannot be empty');
+  });
+});

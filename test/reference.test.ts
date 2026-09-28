@@ -1,16 +1,15 @@
+/**
+ * Compares the output with the original datamatrix-svg implementation
+ * (test/datamatrix.cjs) for inputs where the original is correct.
+ *
+ * Intentional deviations, covered by test/roundtrip.test.ts instead:
+ * - Base256 messages of exactly 250 bytes (two-byte length field)
+ * - Backtick in TEXT mode (Shift 3 value 0)
+ */
 import { describe, it, expect } from 'vitest';
-import { JSDOM } from 'jsdom';
-import { writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import { createRequire } from 'module';
-import DATAMatrixTS, { DataMatrixError } from '../src/datamatrix-svg';
+import { createRequire } from 'node:module';
+import DATAMatrixTS from '../src/datamatrix-svg.js';
 
-// Setup global document for both JS and TS versions
-const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
-(global as any).document = dom.window.document;
-
-// Import the original JS version (kept as reference for comparison)
-// Using createRequire for CommonJS module in ESM context
 const require = createRequire(import.meta.url);
 const DATAMatrixJS = require('./datamatrix.cjs');
 
@@ -128,12 +127,6 @@ describe('DataMatrix SVG Generation', () => {
 
       // Compare
       expect(svgTSString).toBe(svgJSString);
-
-      // Log for visual inspection
-      console.log(`\n=== ${name}: "${msg}" ===`);
-      console.log('JS:', svgJSString.substring(0, 200) + '...');
-      console.log('TS:', svgTSString.substring(0, 200) + '...');
-      console.log('Match:', svgTSString === svgJSString ? '✅ IDENTICAL' : '❌ DIFFERENT');
     });
   });
 
@@ -161,10 +154,6 @@ describe('DataMatrix SVG Generation', () => {
     const svgTSString = svgTS.outerHTML;
 
     expect(svgTSString).toBe(svgJSString);
-
-    console.log('\n=== With Options ===');
-    console.log('JS:', svgJSString);
-    console.log('TS:', svgTSString);
   });
 
   it('should generate identical rectangular DataMatrix', () => {
@@ -187,117 +176,5 @@ describe('DataMatrix SVG Generation', () => {
     const svgTSString = svgTS.outerHTML;
 
     expect(svgTSString).toBe(svgJSString);
-
-    console.log('\n=== Rectangular ===');
-    console.log('JS:', svgJSString);
-    console.log('TS:', svgTSString);
-  });
-});
-
-describe('Output Sample SVGs', () => {
-  it('generates sample SVG files for comparison', () => {
-    const msg = 'Hello DataMatrix!';
-    
-    const svgJS = DATAMatrixJS(msg);
-    const svgTS = DATAMatrixTS(msg);
-
-    // Create test-output directory
-    const outputDir = join(__dirname, '..', 'test-output');
-    try {
-      mkdirSync(outputDir, { recursive: true });
-    } catch (e) {
-      // Directory may already exist
-    }
-
-    // Save SVG files for visual comparison
-    const svgJSString = svgJS.outerHTML;
-    const svgTSString = svgTS.outerHTML;
-
-    writeFileSync(join(outputDir, 'sample-js.svg'), svgJSString);
-    writeFileSync(join(outputDir, 'sample-ts.svg'), svgTSString);
-
-    // Also save with different test cases
-    const testCases = [
-      { name: 'simple', msg: 'Hello World!' },
-      { name: 'numbers', msg: '1234567890' },
-      { name: 'url', msg: 'https://example.com' },
-      { name: 'finnish', msg: 'Äiti ja isä' },
-    ];
-
-    testCases.forEach(({ name, msg }) => {
-      const js = DATAMatrixJS(msg);
-      const ts = DATAMatrixTS(msg);
-      writeFileSync(join(outputDir, `${name}-js.svg`), js.outerHTML);
-      writeFileSync(join(outputDir, `${name}-ts.svg`), ts.outerHTML);
-    });
-
-    console.log('\n' + '='.repeat(60));
-    console.log('SAMPLE SVG OUTPUT COMPARISON');
-    console.log('='.repeat(60));
-    console.log(`\nSVG files saved to: ${outputDir}`);
-    console.log('Files created:');
-    console.log('  - sample-js.svg / sample-ts.svg');
-    testCases.forEach(({ name }) => {
-      console.log(`  - ${name}-js.svg / ${name}-ts.svg`);
-    });
-    
-    console.log('\n--- JavaScript Version (datamatrix.js) ---');
-    console.log(svgJSString);
-    
-    console.log('\n--- TypeScript Version (datamatrix-svg.ts) ---');
-    console.log(svgTSString);
-    
-    console.log('\n--- Comparison ---');
-    console.log('Identical:', svgJSString === svgTSString ? '✅ YES' : '❌ NO');
-    console.log('='.repeat(60));
-
-    expect(svgTSString).toBe(svgJSString);
-  });
-});
-
-describe('DataMatrix Error Handling', () => {
-  it('should throw DataMatrixError with MESSAGE_TOO_LONG code when message exceeds maximum capacity', () => {
-    // DataMatrix maximum capacity is ~1556 ASCII chars for largest 144x144 symbol
-    // Create a message that's definitely too long
-    const tooLongMessage = 'A'.repeat(3000);
-    
-    expect(() => DATAMatrixTS({ message: tooLongMessage })).toThrow(DataMatrixError);
-    
-    try {
-      DATAMatrixTS({ message: tooLongMessage });
-    } catch (e) {
-      expect(e).toBeInstanceOf(DataMatrixError);
-      expect((e as DataMatrixError).code).toBe('MESSAGE_TOO_LONG');
-      expect((e as DataMatrixError).message).toContain('Message too long');
-    }
-  });
-
-  it('should throw DataMatrixError with EMPTY_MESSAGE code for empty message', () => {
-    expect(() => DATAMatrixTS({ message: '' })).toThrow(DataMatrixError);
-    
-    try {
-      DATAMatrixTS({ message: '' });
-    } catch (e) {
-      expect(e).toBeInstanceOf(DataMatrixError);
-      expect((e as DataMatrixError).code).toBe('EMPTY_MESSAGE');
-      expect((e as DataMatrixError).message).toBe('Message cannot be empty');
-    }
-  });
-
-  it('should allow empty message when allowEmptyMessage is true', () => {
-    // With allowEmptyMessage: true, empty message should produce a minimal DataMatrix
-    const svg = DATAMatrixTS({ message: '', allowEmptyMessage: true });
-    expect(svg).toBeDefined();
-    expect(svg.outerHTML).toContain('<svg');
-  });
-
-  it('should handle message near maximum capacity', () => {
-    // ~1500 characters should still work (close to limit but under)
-    const nearMaxMessage = 'A'.repeat(1500);
-    
-    // Should not throw
-    const svg = DATAMatrixTS({ message: nearMaxMessage });
-    expect(svg).toBeDefined();
-    expect(svg.outerHTML).toContain('<svg');
   });
 });
